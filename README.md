@@ -47,8 +47,8 @@ The repo contains simple stochastic generative methods to generate soil profiles
     ```
 2.  **Create and activate a virtual environment:**
     ```bash
-    python -m venv .venv
-    source .venv/bin/activate
+    python -m venv gen-ai-soil
+    source gen-ai-soil/bin/activate
     ```
 3.  **Sync dependencies using uv:**
     This command installs the exact dependencies listed in `pyproject.toml`.
