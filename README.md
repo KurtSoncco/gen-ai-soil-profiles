@@ -1,4 +1,4 @@
-# [Project Title]
+# Generative AI project on Spatial-Correlated Soil Profiles
 
 [![Project Status](https://img.shields.io/badge/Project%20Status-Active-brightgreen?style=for-the-badge)](https://github.com/KurtSoncco/gen-ai-soil-profiles)
 [![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
