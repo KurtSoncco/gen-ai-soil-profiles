@@ -1,7 +1,7 @@
 [project]
-name = "my-research-project"
+name = "gen-ai-soil-profiles"
 version = "0.1.0"
-description = "A short description of the project."
+description = "This project leverages generative AI techniques to analyze and predict soil profiles based on geotechnical studies."
 authors = [
     { name = "Kurt Walter Soncco Sinchi", email = "kurtwal98@berkeley.edu" },
 ]

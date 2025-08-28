@@ -1,13 +1,13 @@
 # [Project Title]
 
-[![Project Status](https://img.shields.io/badge/Project%20Status-Active-brightgreen?style=for-the-badge)](https://github.com/yourusername/yourproject)
+[![Project Status](https://img.shields.io/badge/Project%20Status-Active-brightgreen?style=for-the-badge)](https://github.com/KurtSoncco/gen-ai-soil-profiles)
 [![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
-[![CI](https://github.com/yourusername/yourproject/actions/workflows/ci.yml/badge.svg)](https://github.com/yourusername/yourproject/actions)
+[![CI](https://github.com/KurtSoncco/gen-ai-soil-profiles/actions/workflows/ci.yml/badge.svg)](https://github.com/KurtSoncco/gen-ai-soil-profiles/actions)
 [![uv](https://img.shields.io/badge/uv-%3E%3D0.1.0-blue?style=for-the-badge)](https://github.com/astral-sh/uv)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellowgreen?style=for-the-badge)](https://opensource.org/licenses/MIT)
-[![Github stars](https://img.shields.io/github/stars/yourusername/yourproject?style=social)](https://github.com/yourusername/yourproject/stargazers)
+[![Github stars](https://img.shields.io/github/stars/KurtSoncco/gen-ai-soil-profiles?style=social)](https://github.com/KurtSoncco/gen-ai-soil-profiles/stargazers)
 
-> _Provide a one-paragraph abstract summarizing the project's goals, methods, and key findings._
+This repository aims to leverage generative AI techniques to analyze and predict soil profiles, which are based on geotechnical profile studies, and generated including important conditional features and spatial-correlated parametrization in their realizations. 
 
 [Research Questions](#-research-questions--hypothesis) • [Methodology](#️-methodology) • [Data](#-data) • [How to Reproduce](#-how-to-reproduce) • [Key Results](#-key-results)
 
@@ -15,15 +15,16 @@
 
 ## 🎯 Research Questions / Hypothesis
 
-> _Clearly state the primary research questions or hypotheses this project aims to address. Use a bulleted list._
-> - _Question 1: ..._
-> - _Question 2: ..._
+- How can generative AI techniques improve the accuracy of soil profile predictions?
+- What are the key features that influence soil profile characteristics?
 
 ---
 
 ## 🛠️ Methodology
 
 > _Describe the methodology used. What models, algorithms, or statistical techniques were employed? What was the experimental setup?_
+
+The repo contains simple stochastic generative methods to generate soil profiles, as well as to create the dataset for the training of generative AI models. By using and understading synthetic data, the model is expecting a faster feedback loop in their training and testing, compared to human-made soil profiles. 
 
 ---
 
@@ -41,8 +42,8 @@
 
 1.  **Clone the repository:**
     ```bash
-    git clone [URL_OF_THIS_REPO]
-    cd [NAME_OF_THIS_REPO]
+    git clone https://github.com/KurtSoncco/gen-ai-soil-profiles.git
+    cd gen-ai-soil-profiles
     ```
 2.  **Create and activate a virtual environment:**
     ```bash
