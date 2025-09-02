@@ -52,7 +52,12 @@ class VSPDBClient:
             return False
 
     def fetch_all_data(self, limit: int = 100) -> pd.DataFrame:
-        """Paginates through the API to retrieve all available data."""
+        """Paginates through the API to retrieve all available data.
+        Args:
+            limit (int): Number of records to fetch per page.
+        Returns:
+            pd.DataFrame: A DataFrame containing all fetched data.
+        """
         if not self.token:
             print("Authentication token is missing. Please authenticate first.")
             return pd.DataFrame()
@@ -89,6 +94,11 @@ class VSPDBClient:
 def create_vs_profile(df: pd.DataFrame, vs_id: int) -> Tuple[np.ndarray, np.ndarray]:
     """
     Create depth and vs_array for a given vs_id.
+    Args:
+        df (pd.DataFrame): The DataFrame containing velocity profile data.
+        vs_id (int): The velocity metadata ID to filter the DataFrame.
+    Returns:
+        Tuple[np.ndarray, np.ndarray]: The depth and vs_array for the given vs_id.
     """
     filtered_df = df[df["velocity_metadata_id"] == vs_id].sort_values("vs_top_depth")
 
@@ -97,7 +107,7 @@ def create_vs_profile(df: pd.DataFrame, vs_id: int) -> Tuple[np.ndarray, np.ndar
 
     min_depth = filtered_df["vs_top_depth"].min()
     max_depth = filtered_df["vs_bottom_depth"].max()
-    depth = np.arange(min_depth, max_depth, 0.5)
+    depth = np.arange(min_depth, max_depth, 0.5)  # Intervals of 0.5 meters
     vs_array = np.full_like(depth, np.nan, dtype=float)
 
     for _, row in filtered_df.iterrows():
@@ -124,6 +134,10 @@ def create_vs_profile(df: pd.DataFrame, vs_id: int) -> Tuple[np.ndarray, np.ndar
 def process_vs_data(df: pd.DataFrame) -> Dict[int, Tuple[np.ndarray, np.ndarray]]:
     """
     Processes the DataFrame to create vs_profiles for each unique vs_id.
+    Args:
+        df (pd.DataFrame): The DataFrame containing velocity profile data.
+    Returns:
+        Dict[int, Tuple[np.ndarray, np.ndarray]]: A dictionary mapping vs_id to (depth, vs_array) tuples.
     """
     vs_profiles = {}
     unique_vs_ids = df["velocity_metadata_id"].unique()
@@ -161,6 +175,20 @@ def main():
         print(
             f"\n✅ Created profiles for {len(vs_profiles)} out of {df['velocity_metadata_id'].nunique()} unique IDs."
         )
+
+        # Save processed Vs profiles to a Parquet file
+        profiles_output_path = project_root / "data" / "vspdb_vs_profiles.parquet"
+        profiles_df = pd.DataFrame(
+            [
+                (vs_id, depth, vs)
+                for vs_id, (depths, vs_values) in vs_profiles.items()
+                for depth, vs in zip(depths, vs_values)
+            ],
+            columns=["velocity_metadata_id", "depth", "vs_value"],
+        )
+        table_profiles = pa.Table.from_pandas(profiles_df)
+        pq.write_table(table_profiles, profiles_output_path)
+        print(f"✅ Processed profiles saved to '{profiles_output_path}' successfully.")
     else:
         print("No data was retrieved. The DataFrame is empty.")
 

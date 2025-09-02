@@ -1,0 +1,47 @@
+import torch
+import torch.nn as nn
+
+
+class VAE(nn.Module):
+    def __init__(self, input_dim, latent_dim):
+        super(VAE, self).__init__()
+        self.input_dim = input_dim
+        self.latent_dim = latent_dim
+
+        # Encoder layers
+        self.encoder_fc1 = nn.Linear(input_dim, 128)
+        self.encoder_fc2 = nn.Linear(128, 64)
+        self.z_mean_layer = nn.Linear(64, latent_dim)
+        self.z_log_var_layer = nn.Linear(64, latent_dim)
+
+        # Decoder layers
+        self.decoder_fc1 = nn.Linear(latent_dim, 64)
+        self.decoder_fc2 = nn.Linear(64, 128)
+        self.decoder_fc3 = nn.Linear(128, input_dim)
+
+    def encode(self, x):
+        h = torch.relu(self.encoder_fc1(x))
+        h = torch.relu(self.encoder_fc2(h))
+        return self.z_mean_layer(h), self.z_log_var_layer(h)
+
+    def reparameterize(self, mu, log_var):
+        std = torch.exp(0.5 * log_var)
+        eps = torch.randn_like(std)
+        return mu + eps * std
+
+    def decode(self, z):
+        h = torch.relu(self.decoder_fc1(z))
+        h = torch.relu(self.decoder_fc2(h))
+        return self.decoder_fc3(h)
+
+    def forward(self, x):
+        mu, log_var = self.encode(x)
+        z = self.reparameterize(mu, log_var)
+        reconstruction = self.decode(z)
+        return reconstruction, mu, log_var
+
+
+def vae_loss_function(reconstruction, x, mu, log_var):
+    BCE = nn.functional.mse_loss(reconstruction, x, reduction="sum")
+    KLD = -0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp())
+    return BCE + KLD
