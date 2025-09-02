@@ -1,0 +1,14 @@
+numpy
+pandas
+matplotlib
+seaborn
+scikit-learn
+jupyterlab
+pyarrow>=21.0.0
+dotenv>=0.9.9
+torch
+torchvision
+
+[dev]
+ruff
+pytest

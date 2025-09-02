@@ -1,0 +1,11 @@
+LICENSE
+README.md
+pyproject.toml
+gen_ai_soil_profiles.egg-info/PKG-INFO
+gen_ai_soil_profiles.egg-info/SOURCES.txt
+gen_ai_soil_profiles.egg-info/dependency_links.txt
+gen_ai_soil_profiles.egg-info/requires.txt
+gen_ai_soil_profiles.egg-info/top_level.txt
+src/base.py
+tests/test_base.py
+tests/test_example.py

@@ -1,0 +1,20 @@
+Metadata-Version: 2.1
+Name: gen-ai-soil-profiles
+Version: 0.1.0
+Summary: This project leverages generative AI techniques to analyze and predict soil profiles based on geotechnical studies.
+Author-email: Kurt Walter Soncco Sinchi <kurtwal98@berkeley.edu>
+Requires-Python: <3.14,>=3.12
+License-File: LICENSE
+Requires-Dist: numpy
+Requires-Dist: pandas
+Requires-Dist: matplotlib
+Requires-Dist: seaborn
+Requires-Dist: scikit-learn
+Requires-Dist: jupyterlab
+Requires-Dist: pyarrow>=21.0.0
+Requires-Dist: dotenv>=0.9.9
+Requires-Dist: torch
+Requires-Dist: torchvision
+Provides-Extra: dev
+Requires-Dist: ruff; extra == "dev"
+Requires-Dist: pytest; extra == "dev"

@@ -5,7 +5,8 @@ description = "This project leverages generative AI techniques to analyze and pr
 authors = [
     { name = "Kurt Walter Soncco Sinchi", email = "kurtwal98@berkeley.edu" },
 ]
-requires-python = ">=3.10"
+# Narrows the compatible Python versions to prevent future errors
+requires-python = ">=3.12, <3.14" 
 dependencies = [
     "numpy",
     "pandas",
@@ -13,15 +14,16 @@ dependencies = [
     "seaborn",
     "scikit-learn",
     "jupyterlab",
-    "pytest",
     "pyarrow>=21.0.0",
     "dotenv>=0.9.9",
+    "torch",
+    "torchvision",
 ]
 
 [project.optional-dependencies]
 dev = [
     "ruff",
-    "pytest",
+    "pytest", 
 ]
 
 [tool.setuptools]
@@ -29,3 +31,7 @@ packages = ["src"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+
+# Pytorch index
+[tool.uv]
+extra-index-url = ["https://download.pytorch.org/whl/cu126"]
