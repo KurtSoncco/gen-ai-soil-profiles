@@ -53,7 +53,7 @@ The repo contains simple stochastic generative methods to generate soil profiles
 3.  **Sync dependencies using `uv`:**
     This command installs the project dependencies from `pyproject.toml`.
     ```bash
-    uv sync
+    uv sync --extra dev
     ```
 4.  **Run the analysis:**
     To run the test suite, execute the following command from the root directory:
