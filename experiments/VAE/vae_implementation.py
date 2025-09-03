@@ -3,6 +3,7 @@ import logging
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+import numpy as np
 import pyarrow.parquet as pq
 import seaborn as sns
 import torch
@@ -28,12 +29,12 @@ df = preprocess_data(df)
 logging.info(f"Data shape after preprocessing: {df.shape}")
 
 # --- Standardize and prepare for VAE ---
-NUM_LAYERS = 100
+NUM_LAYERS = 10
 MAX_DEPTH = 2000
 VS_MAX = 2500  # Used for visualization limits
 LATENT_DIM = 1024
 
-tts_profiles_normalized, standard_depths, tt_max = standardize_and_create_tts_profiles(
+tts_profiles_normalized, standard_depths = standardize_and_create_tts_profiles(
     df, NUM_LAYERS, MAX_DEPTH
 )
 INPUT_DIM = tts_profiles_normalized.shape[1]
@@ -47,6 +48,22 @@ X_train_tensor, X_test_tensor = train_test_split(
 logging.info(f"Training data shape: {X_train_tensor.shape}")
 logging.info(f"Testing data shape: {X_test_tensor.shape}")
 
+
+# Plot some profiles for check
+def plot_profiles(profiles, depths, title):
+    plt.figure(figsize=(10, 6))
+    for profile in profiles:
+        plt.plot(profile, depths, alpha=0.5)
+    plt.title(title)
+    plt.xlabel("Cumulative Travel Time")
+    plt.ylabel("Depth")
+    plt.ylim(MAX_DEPTH, 0)
+    plt.grid()
+    plt.show()
+
+
+plot_profiles(tts_profiles_normalized, standard_depths, "Standardized TTS Profiles")
+
 # --- Model setup and training ---
 EPOCHS = 500
 BATCH_SIZE = 10
@@ -56,6 +73,9 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 logging.info(f"Using device: {device}")
 model = VAE(input_dim=INPUT_DIM, latent_dim=LATENT_DIM).to(device)
 optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
+scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+    optimizer, "min", patience=5, factor=0.5
+)
 
 train_dataset = torch.utils.data.TensorDataset(X_train_tensor)
 train_loader = torch.utils.data.DataLoader(
@@ -67,7 +87,7 @@ test_loader = torch.utils.data.DataLoader(
 )
 
 model, train_losses, test_losses = train(
-    model, optimizer, train_loader, test_loader, EPOCHS, str(device)
+    model, optimizer, scheduler, train_loader, test_loader, EPOCHS, str(device)
 )
 
 # Plot training losses
@@ -79,6 +99,8 @@ plt.title("Training and Test Losses")
 plt.xscale("log")
 plt.yscale("log")
 plt.legend()
+
+
 plt.savefig(Path(__file__).parent / "training_losses.png", bbox_inches="tight")
 plt.close()
 
@@ -88,14 +110,14 @@ logging.info(f"Test set reconstruction loss: {reconstruction_loss:.4f}")
 
 # --- Generation and visualization ---
 model.eval()
-NUM_NEW_PROFILES = 500
+NUM_NEW_PROFILES = 10
 with torch.no_grad():
     z = torch.randn(NUM_NEW_PROFILES, LATENT_DIM).to(device)
     # VAE outputs normalized TT profiles
     generated_tts_normalized = model.decoder(z).cpu().numpy()  # type: ignore
 
 # Denormalize and convert to Vs
-generated_tts_denorm = generated_tts_normalized * tt_max
+generated_tts_denorm = np.expm1(generated_tts_normalized)
 dz = standard_depths[1] - standard_depths[0]
 generated_vs_profiles = tts_to_Vs(generated_tts_denorm, dz)
 

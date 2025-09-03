@@ -27,7 +27,16 @@ def Vs_to_tts(Vs, dz):
 def standardize_and_create_tts_profiles(
     df: pd.DataFrame, num_layers: int, max_depth: int
 ) -> tuple:
-    """Calculates cumulative travel time profiles and standardizes them to a fixed size."""
+    """Calculates cumulative travel time profiles and standardizes them to a fixed size. As well, it standardizes the depth values, and the tts values are normalized by logarithmic transformation.
+    Args:
+        df (pd.DataFrame): Input DataFrame containing 'depth' and 'vs_value' columns.
+        num_layers (int): Number of layers for the output profiles.
+        max_depth (int): Maximum depth for the output profiles.
+    Returns:
+        tuple: A tuple containing the following elements:
+            - np.ndarray: The standardized TTS profiles.
+            - np.ndarray: The standard depths.
+    """
     profiles_dict = {
         metadata_id: group.sort_values("depth")
         for metadata_id, group in df.groupby("velocity_metadata_id")
@@ -62,7 +71,8 @@ def standardize_and_create_tts_profiles(
         tts_profiles_list.append(resampled_tts)
 
     tts_profiles_np = np.array(tts_profiles_list)
-    tt_max = np.max(tts_profiles_np) if tts_profiles_np.size > 0 else 1.0
-    tts_profiles_normalized = tts_profiles_np / tt_max
 
-    return tts_profiles_normalized, standard_depths, tt_max
+    # Normalize the TTS profiles by logarithmic transformation
+    tts_profiles_normalized = np.log1p(tts_profiles_np)
+
+    return tts_profiles_normalized, standard_depths
