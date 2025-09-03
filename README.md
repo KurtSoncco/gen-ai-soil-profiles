@@ -46,6 +46,7 @@ The repo contains simple stochastic generative methods to generate soil profiles
 2.  **Create and activate a virtual environment using `uv`:**
     This will create a virtual environment in the `.venv` directory.
     ```bash
+    pyenv local 3.12
     uv venv
     source .venv/bin/activate
     ```
