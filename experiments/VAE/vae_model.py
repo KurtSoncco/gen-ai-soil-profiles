@@ -5,35 +5,34 @@ import torch.nn as nn
 class VAE(nn.Module):
     def __init__(self, input_dim, latent_dim):
         super(VAE, self).__init__()
-        self.encoder_fc1 = nn.Linear(input_dim, 128)
-        self.encoder_fc2 = nn.Linear(128, 64)
-        self.z_mean_layer = nn.Linear(64, latent_dim)
-        self.z_log_var_layer = nn.Linear(64, latent_dim)
+        self.encoder = nn.Sequential(
+            nn.Linear(input_dim, 512),
+            nn.ReLU(),
+            nn.Linear(512, 256),
+            nn.ReLU(),
+        )
+        self.fc_mu = nn.Linear(256, latent_dim)
+        self.fc_logvar = nn.Linear(256, latent_dim)
 
-        self.decoder_fc1 = nn.Linear(latent_dim, 64)
-        self.decoder_fc2 = nn.Linear(64, 128)
-        self.decoder_fc3 = nn.Linear(128, input_dim)
+        self.decoder = nn.Sequential(
+            nn.Linear(latent_dim, 256),
+            nn.ReLU(),
+            nn.Linear(256, 512),
+            nn.ReLU(),
+            nn.Linear(512, input_dim),
+            nn.Softplus(),  # Ensure output is positive
+        )
 
-    def encode(self, x):
-        h = torch.relu(self.encoder_fc1(x))
-        h = torch.relu(self.encoder_fc2(h))
-        return self.z_mean_layer(h), self.z_log_var_layer(h)
-
-    def reparameterize(self, mu, log_var):
-        std = torch.exp(0.5 * log_var)
+    def reparameterize(self, mu, logvar):
+        std = torch.exp(0.5 * logvar)
         eps = torch.randn_like(std)
         return mu + eps * std
 
-    def decoder(self, z):
-        h = torch.relu(self.decoder_fc1(z))
-        h = torch.relu(self.decoder_fc2(h))
-        return self.decoder_fc3(h)
-
     def forward(self, x):
-        mu, log_var = self.encode(x)
+        h = self.encoder(x.view(-1, self.encoder[0].in_features))
+        mu, log_var = self.fc_mu(h), self.fc_logvar(h)
         z = self.reparameterize(mu, log_var)
-        reconstruction = self.decoder(z)
-        return reconstruction, mu, log_var
+        return self.decoder(z), mu, log_var
 
 
 def vae_loss_function(reconstruction, x, mu, log_var):
