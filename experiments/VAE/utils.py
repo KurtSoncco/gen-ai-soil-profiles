@@ -6,26 +6,13 @@ import numpy as np
 import seaborn as sns
 
 
-def tts_to_Vs(tts, dz):
-    """
-    Convert a cumulative travel time profile to a layered Vs profile.
-    """
-    # Insert a column of zeros at the beginning of each profile
-    tts_with_zero = np.insert(tts, 0, 0, axis=1)
-    # Calculate the difference along the layers (axis=1)
-    d_tts = np.diff(tts_with_zero, axis=1)
-    # Add a small epsilon to avoid division by zero
-    Vs = dz / (d_tts + 1e-9)
-    return Vs
-
-
 def plot_stair_profiles(profiles, depths, title, max_depth, vs_max):
     """Plot multiple Vs profiles as stair plots."""
     plt.figure(figsize=(10, 8))
     for profile in profiles:
         # Create stair plot points
-        y_stair = np.repeat(depths, 2)[:-1]
-        x_stair = np.repeat(profile, 2)[1:]
+        y_stair = np.repeat(depths, 2)[1:-1]
+        x_stair = np.repeat(profile, 2)
         plt.plot(x_stair, y_stair)
 
     plt.title(title)
@@ -40,26 +27,84 @@ def plot_stair_profiles(profiles, depths, title, max_depth, vs_max):
     plt.close()
 
 
+def tts_to_Vs(d_tts, dz):
+    """
+    Convert a profile of travel time differences (d_tts) to a layered Vs profile.
+    """
+    # Add a small epsilon to avoid division by zero
+    Vs = dz / (d_tts + 1e-9)
+    return Vs
+
+
+def Vs30_calc(depth, vs):
+    """
+    Calculate Vs30 from a single velocity profile with non-uniform layers.
+    `depth` represents the top of each layer.
+    Formula is 30 / sum(di/vsi) for layers until the depth sums up to 30.
+    """
+    # Convert to numpy arrays to handle pandas Series indexing and ensure correct sorting
+    depth = np.array(depth)
+    vs = np.array(vs)
+    sorted_indices = np.argsort(depth)
+    depth = depth[sorted_indices]
+    vs = vs[sorted_indices]
+
+    if not len(depth) or not len(vs) or depth[0] > 30:
+        return np.nan
+
+    # If the profile is deeper than 30m, we might not need all layers
+    if depth[-1] < 30:
+        # If the last layer starts below 30m but the profile extends to 30m,
+        # we need to handle it. This case is complex with non-uniform layers.
+        # For simplicity, we return NaN if the last measured layer top is less than 30.
+        # A more sophisticated approach would be to extrapolate, but that can be unreliable.
+        return np.nan
+
+    time_sum = 0
+    for i in range(len(vs)):
+        top_depth = depth[i]
+        # The bottom of the last layer is effectively infinite, but we only care up to 30m.
+        bottom_depth = depth[i + 1] if i + 1 < len(depth) else 30.0
+
+        if top_depth >= 30:
+            break
+
+        layer_thickness = min(bottom_depth, 30.0) - top_depth
+        if vs[i] > 0:
+            time_sum += layer_thickness / vs[i]
+        else:  # If vs is zero or negative, we can't calculate a meaningful Vs30
+            return np.nan
+
+    return 30.0 / time_sum if time_sum > 0 else np.nan
+
+
 def calculate_vs30(vs_profile, depths):
-    """Calculate Vs30 from a Vs profile."""
+    """
+    Calculate Vs30 from a standardized Vs profile with uniform layers.
+    `depths` are the layer boundaries (N+1 points for N layers).
+    `vs_profile` has N points, one for each layer.
+    """
     if depths[-1] < 30:
         return np.nan  # Not enough depth
 
     total_time = 0
-    total_depth = 0
+    # `depths` has N+1 points for N layers. `vs_profile` has N points.
     for i in range(len(vs_profile)):
         depth_start = depths[i]
-        depth_end = depths[i + 1] if i + 1 < len(depths) else 30.0
+        depth_end = depths[i + 1]
 
         if depth_start >= 30:
             break
 
+        # Layer thickness is the portion of this layer that is above 30m
         layer_thickness = min(depth_end, 30.0) - depth_start
-        travel_time = layer_thickness / vs_profile[i]
-        total_time += travel_time
-        total_depth += layer_thickness
+        if vs_profile[i] > 0:
+            total_time += layer_thickness / vs_profile[i]
 
-    return total_depth / total_time if total_time > 0 else 0
+    if total_time <= 0:
+        return np.nan
+
+    return 30.0 / total_time
 
 
 def evaluate_generation(real_vs, generated_vs, standard_depths):

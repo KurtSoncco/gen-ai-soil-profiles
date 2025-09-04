@@ -15,13 +15,13 @@ def preprocess_data(df: pd.DataFrame) -> pd.DataFrame:
     return df.reset_index(drop=True)
 
 
-def Vs_to_tts(Vs, dz):
+def Vs_to_tts(Vs, h):
     """
     Convert Vs to cumulative travel time profile.
     """
-    d_tts = dz / Vs
-    tts = np.cumsum(d_tts)
-    return tts
+    d_tts = h / Vs
+    tts_layers = np.cumsum(d_tts)
+    return np.cumsum(tts_layers)
 
 
 def standardize_and_create_tts_profiles(
@@ -43,7 +43,8 @@ def standardize_and_create_tts_profiles(
     }
 
     tts_profiles_list = []
-    standard_depths = np.linspace(0, max_depth, num_layers)
+    # For N layers, we need N+1 depth boundaries.
+    standard_depths = np.linspace(0, max_depth, num_layers + 1)
 
     for profile_id, profile_data in profiles_dict.items():
         depths = profile_data["depth"].to_numpy()
@@ -64,11 +65,20 @@ def standardize_and_create_tts_profiles(
             raw_tts,
             kind="linear",
             bounds_error=False,
-            fill_value=(raw_tts[0], raw_tts[-1]),  # type:ignore
+            fill_value="extrapolate",  # type: ignore
         )
+        # We want the TTS at the layer boundaries.
         resampled_tts = f_interp(standard_depths)
 
-        tts_profiles_list.append(resampled_tts)
+        # The VAE works on the travel times *within* the standardized layers, not the cumulative time.
+        # We take the diff, and since the first value is at depth 0, it's always 0.
+        # The output of this will be of size `num_layers`.
+        resampled_d_tts = np.diff(resampled_tts)
+
+        # Ensure travel time differences are non-negative
+        resampled_d_tts[resampled_d_tts < 0] = 0
+
+        tts_profiles_list.append(resampled_d_tts)
 
     tts_profiles_np = np.array(tts_profiles_list)
 

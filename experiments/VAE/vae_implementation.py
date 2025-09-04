@@ -15,7 +15,13 @@ sys.path.append(str(Path(__file__).parent.parent.parent / "src"))
 from preprocessing import preprocess_data, standardize_and_create_tts_profiles
 from sklearn.model_selection import train_test_split
 from training import train
-from utils import evaluate_generation, plot_stair_profiles, tts_to_Vs
+from utils import (
+    Vs30_calc,
+    calculate_vs30,
+    evaluate_generation,
+    plot_stair_profiles,
+    tts_to_Vs,
+)
 from vae_model import VAE, evaluate_model, vae_loss_function
 
 from logging_config import setup_logging
@@ -29,16 +35,27 @@ file_path = Path(__file__).parent.parent.parent / "data" / "vspdb_vs_profiles.pa
 table = pq.read_table(file_path)
 df = table.to_pandas()
 logging.info(f"Data loaded with shape: {df.shape}")
+logging.info(f"Data loaded with columns: {df.columns.tolist()}")
 
 # Preprocess the data
 df = preprocess_data(df)
 logging.info(f"Data shape after preprocessing: {df.shape}")
+
+# Compute the Vs30 of the real profiles
+real_vs30 = [
+    Vs30_calc(p["depth"], p["vs_value"]) for _, p in df.groupby("velocity_metadata_id")
+]
+# Print statistics
+logging.info(
+    f"Real Vs30 statistics: mean={np.nanmean(real_vs30):.2f}, std={np.nanstd(real_vs30):.2f}, min={np.nanmin(real_vs30):.2f}, max={np.nanmax(real_vs30):.2f}"
+)
 
 # --- Standardize and prepare for VAE ---
 NUM_LAYERS = 10
 MAX_DEPTH = 2000
 VS_MAX = 2500  # Used for visualization limits
 LATENT_DIM = 32  # Reduced latent dimension
+NUM_NEW_PROFILES = 1000  # Number of new profiles to generate
 
 tts_profiles_normalized, standard_depths = standardize_and_create_tts_profiles(
     df, NUM_LAYERS, MAX_DEPTH
@@ -59,7 +76,9 @@ logging.info(f"Testing data shape: {X_test_tensor.shape}")
 def plot_profiles(profiles, depths, title):
     plt.figure(figsize=(10, 6))
     for profile in profiles:
-        plt.plot(profile, depths, alpha=0.5)
+        # `profiles` are now d_tts, need to convert to cumulative for plotting
+        tts_cumulative = np.insert(np.cumsum(profile), 0, 0)
+        plt.plot(tts_cumulative, depths, alpha=0.5)
     plt.title(title)
     plt.xlabel("Cumulative Travel Time")
     plt.ylabel("Depth")
@@ -68,7 +87,10 @@ def plot_profiles(profiles, depths, title):
     plt.show()
 
 
-plot_profiles(tts_profiles_normalized, standard_depths, "Standardized TTS Profiles")
+plot_profiles(
+    tts_profiles_normalized, standard_depths, "Standardized TTS Profiles (d_tts)"
+)
+
 
 # --- Model setup and training ---
 EPOCHS = 500
@@ -116,22 +138,32 @@ logging.info(f"Test set reconstruction loss: {reconstruction_loss:.4f}")
 
 # --- Generation and visualization ---
 model.eval()
-NUM_NEW_PROFILES = X_test_tensor.shape[0]  # Generate as many as in test set
 with torch.no_grad():
     z = torch.randn(NUM_NEW_PROFILES, LATENT_DIM).to(device)
     # VAE outputs normalized TT profiles
-    generated_tts_normalized = model.decoder(z).cpu().numpy()  # type: ignore
+    generated_tts_normalized = model.decoder(z).cpu().numpy()  # type:ignore
 
 # Denormalize and convert to Vs
-generated_tts_denorm = np.expm1(generated_tts_normalized)
-dz = standard_depths[1] - standard_depths[0]
-generated_vs_profiles = tts_to_Vs(generated_tts_denorm, dz)
+generated_d_tts_denorm = np.expm1(generated_tts_normalized)
+dz = np.diff(standard_depths)  # This is now an array of layer thicknesses
+generated_vs_profiles = tts_to_Vs(generated_d_tts_denorm, dz)
 
 # Also convert real test data to Vs for comparison
 real_tts_normalized = X_test_tensor.cpu().numpy()
-real_tts_denorm = np.expm1(real_tts_normalized)
-real_vs_profiles = tts_to_Vs(real_tts_denorm, dz)
+real_d_tts_denorm = np.expm1(real_tts_normalized)
+real_vs_profiles = tts_to_Vs(real_d_tts_denorm, dz)
 
+# Calculate Vs30 for generated and real profiles
+generated_vs30 = [calculate_vs30(p, standard_depths) for p in generated_vs_profiles]
+real_vs30_test = [calculate_vs30(p, standard_depths) for p in real_vs_profiles]
+
+# Print statistics
+logging.info(
+    f"Generated Vs30 statistics: mean={np.nanmean(generated_vs30):.2f}, std={np.nanstd(generated_vs30):.2f}, min={np.nanmin(generated_vs30):.2f}, max={np.nanmax(generated_vs30):.2f}"
+)
+logging.info(
+    f"Real (test set) Vs30 statistics: mean={np.nanmean(real_vs30_test):.2f}, std={np.nanstd(real_vs30_test):.2f}, min={np.nanmin(real_vs30_test):.2f}, max={np.nanmax(real_vs30_test):.2f}"
+)
 
 logging.info("Plotting generated Vs profiles...")
 plot_stair_profiles(
