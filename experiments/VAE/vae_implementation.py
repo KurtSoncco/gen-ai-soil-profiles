@@ -1,5 +1,5 @@
-# main.py
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -9,6 +9,8 @@ import pyarrow.parquet as pq
 import seaborn as sns
 import torch
 import torch.optim as optim
+import wandb
+from dotenv import load_dotenv
 
 # Add src to path to import logging_config
 sys.path.append(str(Path(__file__).parent.parent.parent / "src"))
@@ -25,6 +27,9 @@ from utils import (
 from vae_model import VAE, evaluate_model, vae_loss_function
 
 from logging_config import setup_logging
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Basic configuration
 setup_logging()
@@ -114,6 +119,17 @@ test_loader = torch.utils.data.DataLoader(
     test_dataset, batch_size=BATCH_SIZE, shuffle=False
 )
 
+# --- W&B Initialization ---
+wandb.init(
+    project=os.getenv("W_B_PROJECT"),
+    config={
+        "learning_rate": LEARNING_RATE,
+        "epochs": EPOCHS,
+        "batch_size": BATCH_SIZE,
+        "latent_dim": LATENT_DIM,
+    },
+)
+
 model, train_losses, test_losses = train(
     model, optimizer, scheduler, train_loader, test_loader, EPOCHS, str(device)
 )
@@ -177,5 +193,5 @@ plot_stair_profiles(
 # --- Quantitative Evaluation ---
 logging.info("Evaluating generated profiles...")
 evaluate_generation(real_vs_profiles, generated_vs_profiles, standard_depths)
-
+wandb.finish()
 logging.info("VAE script finished.")

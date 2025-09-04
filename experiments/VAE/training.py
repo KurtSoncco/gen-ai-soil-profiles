@@ -3,6 +3,7 @@ from pathlib import Path
 
 import torch
 import tqdm
+import wandb
 from vae_model import evaluate_model, vae_loss_function
 
 
@@ -54,6 +55,15 @@ def train(
         test_losses.append(test_loss)
 
         scheduler.step(test_loss)
+
+        wandb.log(
+            {
+                "epoch": epoch + 1,
+                "train_loss": avg_train_loss,
+                "test_loss": test_loss,
+                "lr": optimizer.param_groups[0]["lr"],
+            }
+        )
 
         logging.info(
             f"Epoch: {epoch + 1}/{EPOCHS}, Train Loss: {avg_train_loss:.4f}, Test Loss: {test_loss:.4f}"

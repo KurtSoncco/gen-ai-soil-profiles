@@ -4,6 +4,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
+import wandb
 
 
 def plot_stair_profiles(profiles, depths, title, max_depth, vs_max):
@@ -21,6 +22,7 @@ def plot_stair_profiles(profiles, depths, title, max_depth, vs_max):
     plt.ylim(max_depth, 0)
     plt.xlim(0, vs_max)
     plt.grid(True)
+    wandb.log({title: wandb.Image(plt)})
     plt.savefig(
         Path(__file__).parent / "generated_vs_profiles.png", bbox_inches="tight"
     )
@@ -128,6 +130,7 @@ def evaluate_generation(real_vs, generated_vs, standard_depths):
     plt.title("Comparison of Vs30 Distributions")
     plt.xlabel("Vs30 [m/s]")
     plt.legend()
+    wandb.log({"Comparison of Vs30 Distributions": wandb.Image(plt)})
     plt.savefig(Path(__file__).parent / "vs30_comparison.png", bbox_inches="tight")
     plt.close()
 
@@ -136,6 +139,15 @@ def evaluate_generation(real_vs, generated_vs, standard_depths):
     )
     logging.info(
         f"Generated Vs30 stats: mean={np.mean(generated_vs30):.2f}, std={np.std(generated_vs30):.2f}"
+    )
+
+    wandb.log(
+        {
+            "eval_real_vs30_mean": np.mean(real_vs30),
+            "eval_real_vs30_std": np.std(real_vs30),
+            "eval_generated_vs30_mean": np.mean(generated_vs30),
+            "eval_generated_vs30_std": np.std(generated_vs30),
+        }
     )
 
     # 2. Compare Vs distributions at different depths
@@ -177,5 +189,6 @@ def evaluate_generation(real_vs, generated_vs, standard_depths):
         axes[i].legend()
 
     plt.tight_layout()
+    wandb.log({"Vs Distribution at Depths": wandb.Image(fig)})
     plt.savefig(Path(__file__).parent / "vs_dist_comparison.png", bbox_inches="tight")
     plt.close()

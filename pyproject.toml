@@ -20,6 +20,7 @@ dependencies = [
     "torch",
     "torchvision",
     "tqdm",
+    "wandb",
 ]
 
 [project.optional-dependencies]
