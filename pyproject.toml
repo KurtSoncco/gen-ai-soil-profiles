@@ -14,6 +14,7 @@ dependencies = [
     "seaborn",
     "scikit-learn",
     "jupyterlab",
+    "jupyter",
     "pyarrow>=21.0.0",
     "dotenv>=0.9.9",
     "markupsafe==2.1.3",

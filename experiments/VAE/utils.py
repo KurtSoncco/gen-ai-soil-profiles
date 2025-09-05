@@ -3,7 +3,9 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 import seaborn as sns
+
 import wandb
 
 
@@ -152,36 +154,46 @@ def evaluate_generation(real_vs, generated_vs, standard_depths):
 
     # 2. Compare Vs distributions at different depths
     depth_intervals = [(0, 10), (10, 30), (30, 100)]
-    real_vs_flat = real_vs.flatten()
-    max_vs = np.percentile(real_vs_flat, 99)
+    max_vs = np.percentile(real_vs, 99)
 
     # Calculate layer mid-depths for correct masking
     layer_mid_depths = (standard_depths[:-1] + standard_depths[1:]) / 2
 
+    # Create a long-form dataframe for easier plotting with seaborn
+    real_vs_long = pd.DataFrame(real_vs).melt(var_name="layer_index", value_name="vs")
+    real_vs_long["depth"] = real_vs_long["layer_index"].apply(
+        lambda i: layer_mid_depths[i]
+    )
+    real_vs_long["type"] = "Real"
+
+    gen_vs_long = pd.DataFrame(generated_vs).melt(
+        var_name="layer_index", value_name="vs"
+    )
+    gen_vs_long["depth"] = gen_vs_long["layer_index"].apply(
+        lambda i: layer_mid_depths[i]
+    )
+    gen_vs_long["type"] = "Generated"
+
+    combined_df = pd.concat([real_vs_long, gen_vs_long], ignore_index=True)
+
     fig, axes = plt.subplots(1, 3, figsize=(18, 5), sharey=True)
     for i, (start_depth, end_depth) in enumerate(depth_intervals):
-        mask = (layer_mid_depths >= start_depth) & (layer_mid_depths < end_depth)
-        if not np.any(mask):
+        # Filter data for the current depth interval
+        data_in_interval = combined_df[
+            (combined_df["depth"] >= start_depth) & (combined_df["depth"] < end_depth)
+        ]
+
+        if data_in_interval.empty:
             continue
 
-        real_vals = real_vs[:, mask].flatten()
-        gen_vals = generated_vs[:, mask].flatten()
-
         sns.histplot(
-            real_vals,
+            data=data_in_interval,
+            x="vs",
+            hue="type",
             ax=axes[i],
-            color="blue",
-            label="Real",
             kde=True,
             stat="density",
-        )
-        sns.histplot(
-            gen_vals,
-            ax=axes[i],
-            color="red",
-            label="Generated",
-            kde=True,
-            stat="density",
+            common_norm=False,
         )
         axes[i].set_title(f"Vs dist. at {start_depth}-{end_depth} m")
         axes[i].set_xlabel("Vs [m/s]")
