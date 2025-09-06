@@ -31,11 +31,12 @@ dev = [
 ]
 
 [tool.setuptools]
-packages = ["src"]
+packages = ["soilgen_ai"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
 
 # Pytorch index
 [tool.uv]
+package = true
 extra-index-url = ["https://download.pytorch.org/whl/cu126"]

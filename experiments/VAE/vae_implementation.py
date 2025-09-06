@@ -1,6 +1,5 @@
 import logging
 import os
-import sys
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -10,11 +9,6 @@ import seaborn as sns
 import torch
 import torch.optim as optim
 from dotenv import load_dotenv
-
-import wandb
-
-# Add src to path to import logging_config
-sys.path.append(str(Path(__file__).parent.parent.parent / "src"))
 from preprocessing import preprocess_data, standardize_and_create_tts_profiles
 from sklearn.model_selection import train_test_split
 from training import train
@@ -29,7 +23,8 @@ from vae_model import VAE, evaluate_model, vae_loss_function
 from vq_vae_model import VQVAE  # vq_vae_loss_function
 from vq_vae_model import evaluate_model as evaluate_vq_model
 
-from logging_config import setup_logging
+import wandb
+from soilgen_ai.logging_config import setup_logging
 
 # Load environment variables from .env file
 load_dotenv()

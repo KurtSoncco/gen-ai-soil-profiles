@@ -18,6 +18,11 @@ env/
 # Jupyter Notebook
 .ipynb_checkpoints/
 
+# Package distribution
+*.egg-info/
+dist/
+build/
+
 # Data - NEVER commit large data files
 *.csv
 *.tsv
