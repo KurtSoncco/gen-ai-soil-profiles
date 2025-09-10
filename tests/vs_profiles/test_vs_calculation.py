@@ -1,7 +1,9 @@
+import numpy as np
 import pandas as pd
 import pytest
 
 from soilgen_ai.vs_profiles.vs_calculation import (
+    compute_tts,
     compute_vs30,
     compute_vs_at_depth,
     compute_vs_rms,
@@ -14,7 +16,6 @@ def sample_profile():
         {
             "depth": [0, 5, 15, 38, 60, 123, 200],
             "vs_value": [200, 300, 400, 500, 600, 700, 800],
-            "tts": [0, 0.025, 0.05, 0.1, 0.15, 0.3, 0.5],
         }
     )
     return profile
@@ -44,3 +45,28 @@ def test_compute_vs_rms(sample_profile):
     vs_rms_30 = compute_vs_rms(sample_profile, z=30)
     assert isinstance(vs_rms_30, float)
     assert vs_rms_30 == pytest.approx(341.56, rel=1e-2)  # Approximate expected value
+
+
+def test_compute_tts(sample_profile):
+    tts_profile = compute_tts(sample_profile)
+    assert tts_profile is not None
+    assert "tts" in tts_profile.columns
+    assert len(tts_profile) == len(sample_profile)
+    assert tts_profile["tts"].iloc[0] == 0.0  # First TTS value should be zero
+
+    # Check that TTS values are increasing
+    assert all(pd.to_numeric(tts_profile["tts"].diff().iloc[1:]) > 0)
+
+    expected_tts = np.array(
+        [0.0, 0.05, 0.11666667, 0.231667, 0.319667, 0.529667, 0.749667]
+    )
+    np.testing.assert_allclose(tts_profile["tts"], expected_tts, rtol=1e-5)
+
+    # Standarization as well
+    standardized_tts_profile = compute_tts(sample_profile, standardization=True)
+    assert standardized_tts_profile is not None
+
+    expected_standardized_tts = np.log1p(expected_tts)
+    np.testing.assert_allclose(
+        standardized_tts_profile["tts"], expected_standardized_tts, rtol=1e-5
+    )

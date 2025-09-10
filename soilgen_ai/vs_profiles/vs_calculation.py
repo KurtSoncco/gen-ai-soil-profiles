@@ -1,3 +1,4 @@
+import copy
 from typing import Optional
 
 import numpy as np
@@ -34,7 +35,7 @@ def compute_vs30(profile: pd.DataFrame) -> Optional[float]:
         return None
 
     # Work on a copy to avoid modifying the original DataFrame
-    profile = profile.copy()
+    profile = copy.deepcopy(profile)
 
     # Coerce columns to numeric, turning errors into NaT (which will be dropped)
     profile["depth"] = pd.to_numeric(profile["depth"], errors="coerce")
@@ -132,7 +133,7 @@ def compute_vs_at_depth(profile: pd.DataFrame, z: float) -> Optional[float]:
         return None
 
     # Work on a copy to avoid modifying the original DataFrame
-    profile = profile.copy()
+    profile = copy.deepcopy(profile)
     profile["depth"] = pd.to_numeric(profile["depth"], errors="coerce")
     profile["vs_value"] = pd.to_numeric(profile["vs_value"], errors="coerce")
     profile.dropna(subset=["depth", "vs_value"], inplace=True)
@@ -221,7 +222,7 @@ def compute_vs_rms(profile: pd.DataFrame, z: float) -> Optional[float]:
     if profile.empty:
         return None
 
-    profile = profile.copy()
+    profile = copy.deepcopy(profile)
     profile["depth"] = pd.to_numeric(profile["depth"], errors="coerce")
     profile["vs_value"] = pd.to_numeric(profile["vs_value"], errors="coerce")
     profile.dropna(subset=["depth", "vs_value"], inplace=True)
@@ -275,3 +276,84 @@ def compute_vs_rms(profile: pd.DataFrame, z: float) -> Optional[float]:
         )
         mean_sq_vel = sum_to_z / z
         return float(np.sqrt(mean_sq_vel))
+
+
+def compute_tts(
+    profile: pd.DataFrame, standardization: bool = False
+) -> Optional[pd.DataFrame]:
+    """
+    Computes the cumulative two-way travel time (TTS) for a Vs profile.
+
+    TTS is the time for a seismic wave to travel from the surface down to a
+    specific depth and reflect back to the surface. This function adds a 'tts'
+    column to the DataFrame.
+
+    Args:
+        profile (pd.DataFrame): A DataFrame with at least 'depth' (m) and
+                                'vs_value' (m/s) columns.
+        standardization (bool): If True, tts is standardized with log1p. Default is False.
+
+    Returns:
+        Optional[pd.DataFrame]: The DataFrame with a new 'tts' column, or
+        None if the input profile is empty after cleaning.
+
+    Raises:
+        ValueError: If required columns are missing, depths are negative,
+                    or velocities are non-positive.
+    """
+    # --- 1. Input Validation and Preparation ---
+    if not all(col in profile.columns for col in ["depth", "vs_value"]):
+        raise ValueError("Profile must contain 'depth' and 'vs_value' columns.")
+
+    if profile.empty:
+        return None
+
+    # Work on a copy to avoid modifying the original DataFrame
+    profile = copy.deepcopy(profile)
+    profile["depth"] = pd.to_numeric(profile["depth"], errors="coerce")
+    profile["vs_value"] = pd.to_numeric(profile["vs_value"], errors="coerce")
+    profile.dropna(subset=["depth", "vs_value"], inplace=True)
+
+    if profile.empty:
+        return None
+
+    if (profile["depth"] < 0).any():
+        raise ValueError("Depth values cannot be negative.")
+    if (profile["vs_value"] <= 0).any():
+        raise ValueError("Shear-wave velocity (vs_value) must be positive.")
+
+    # --- 2. Data Processing ---
+    profile.sort_values("depth", inplace=True)
+    profile.reset_index(drop=True, inplace=True)
+
+    # Ensure the profile explicitly starts at the surface (depth 0)
+    if profile.loc[0, "depth"] != 0:
+        surface_row = pd.DataFrame(
+            [{"depth": 0, "vs_value": profile.loc[0, "vs_value"]}]
+        )
+        profile = pd.concat([surface_row, profile], ignore_index=True)
+
+    if len(profile) < 2:
+        profile["tts"] = 0.0
+        return profile
+
+    # --- 3. Corrected and Vectorized Calculation ---
+    # Calculate the thickness of each layer (depth[i] - depth[i-1])
+    thickness = profile["depth"].diff().iloc[1:].to_numpy()
+
+    # Get the velocity for each layer (velocity[i-1])
+    # This corrects the bug in the original code.
+    velocities = profile["vs_value"].iloc[:-1].to_numpy()
+
+    # Calculate two-way travel time for each individual layer
+    layer_tts = 2 * thickness / velocities
+
+    # The TTS at any depth is the cumulative sum of the layer travel times above it.
+    # The TTS at the surface (depth 0) is always 0.
+    cumulative_tts = np.cumsum(layer_tts)
+    profile["tts"] = np.concatenate(([0], cumulative_tts))
+
+    if standardization:
+        profile["tts"] = np.log1p(profile["tts"])
+
+    return profile
