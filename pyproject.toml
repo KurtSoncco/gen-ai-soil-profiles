@@ -36,7 +36,8 @@ packages = ["soilgen_ai"]
 [tool.pytest.ini_options]
 pythonpath = ["."]
 
-# Pytorch index
+
 [tool.uv]
 package = true
+# Pytorch index
 extra-index-url = ["https://download.pytorch.org/whl/cu126"]
