@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from src.base import Soil, SoilBorehole
+from soilgen_ai.base import Soil, SoilBorehole
 
 
 # --- Fixtures for Mock Data ---
