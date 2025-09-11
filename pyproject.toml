@@ -6,7 +6,7 @@ authors = [
     { name = "Kurt Walter Soncco Sinchi", email = "kurtwal98@berkeley.edu" },
 ]
 # Narrows the compatible Python versions to prevent future errors
-requires-python = ">=3.12, <3.14" 
+requires-python = ">=3.10" 
 dependencies = [
     "numpy",
     "pandas",
@@ -22,6 +22,7 @@ dependencies = [
     "torchvision",
     "tqdm",
     "wandb",
+    "box_sdk_gen[jwt]",
 ]
 
 [project.optional-dependencies]

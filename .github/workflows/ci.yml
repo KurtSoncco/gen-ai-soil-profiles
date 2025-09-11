@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.12"] 
+        python-version: ["3.11"] 
 
     steps:
       # 1. Check out the repository code
