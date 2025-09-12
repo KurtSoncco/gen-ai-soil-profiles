@@ -23,6 +23,7 @@ dependencies = [
     "tqdm",
     "wandb",
     "box_sdk_gen[jwt]",
+    "jax[cuda12]",
 ]
 
 [project.optional-dependencies]
