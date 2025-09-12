@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -57,4 +59,11 @@ def plot_best_profile(best_profile: jnp.ndarray):
         a.invert_yaxis()  # Depth increases downwards
 
     plt.tight_layout()
+    plt.savefig(
+        Path(__file__).cwd()
+        / "outputs"
+        / "figures/genetic_approach"
+        / "best_profile.png",
+        dpi=300,
+    )
     plt.show()
