@@ -24,6 +24,9 @@ dependencies = [
     "wandb",
     "box_sdk_gen[jwt]",
     "jax[cuda12]",
+    "numpyro[cuda]",
+    "arviz",
+    
 ]
 
 [project.optional-dependencies]

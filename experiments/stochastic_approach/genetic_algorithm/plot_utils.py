@@ -1,5 +1,8 @@
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
+import seaborn as sns
+
+sns.set_palette("colorblind")
 
 
 def plot_best_profile(best_profile: jnp.ndarray):
