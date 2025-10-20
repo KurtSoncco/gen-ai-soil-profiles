@@ -1,3 +1,5 @@
+import os
+from pathlib import Path
 from typing import Dict, Tuple
 
 import jax.numpy as jnp
@@ -27,6 +29,7 @@ class GeneticAlgorithm:
         self.chromosome_len = self.max_layers * 2
         self.common_depths = jnp.linspace(0, self.max_allowable_depth, 100)
         self.epsilon = 1e-8  # Small value to prevent division by zero
+        self.cache_path = config.get("cache_path")
 
         # Common depth axis for comparing profiles
         self.common_depths = jnp.linspace(0, self.max_allowable_depth, 100)
@@ -42,12 +45,24 @@ class GeneticAlgorithm:
 
     def _preprocess_real_data(self, data_dict: Dict[str, pd.DataFrame]):
         """
-        Calculates KDEs and interpolated profiles from real data.
+        Calculates KDEs and interpolated profiles from real data, using caching.
 
         Args:
             data_dict (Dict[str, pd.DataFrame]): Dictionary of real profiles.
 
         """
+        # If a cache path is provided and the file exists, load from cache
+        if self.cache_path and os.path.exists(self.cache_path):
+            logger.info(f"Loading preprocessed data from cache: {self.cache_path}")
+            cached_data = jnp.load(self.cache_path)
+            self.real_max_depths = cached_data["real_max_depths"]
+            self.real_num_layers = cached_data["real_num_layers"]
+            self.presampled_max_depths = cached_data["presampled_max_depths"]
+            self.presampled_num_layers = cached_data["presampled_num_layers"]
+            self.real_profiles_interp = cached_data["real_profiles_interp"]
+            logger.info("Successfully loaded data from cache.")
+            return
+
         logger.info("Preprocessing real data...")
         # Filter out empty or invalid profiles
         valid_profiles = [
@@ -95,6 +110,21 @@ class GeneticAlgorithm:
             ]
         )
         logger.info("Preprocessing complete.")
+
+        # If a cache path is provided, save the processed data
+        if self.cache_path:
+            logger.info(f"Saving preprocessed data to cache: {self.cache_path}")
+            # Ensure the directory exists
+            Path(self.cache_path).parent.mkdir(parents=True, exist_ok=True)
+            jnp.savez(
+                self.cache_path,
+                real_max_depths=self.real_max_depths,
+                real_num_layers=self.real_num_layers,
+                presampled_max_depths=self.presampled_max_depths,
+                presampled_num_layers=self.presampled_num_layers,
+                real_profiles_interp=self.real_profiles_interp,
+            )
+            logger.info("Successfully saved data to cache.")
 
     @staticmethod
     @jit
@@ -145,6 +175,118 @@ class GeneticAlgorithm:
         # A profile is valid if it has 0 or 1 layer, or if it has >1 and is monotonic.
         is_monotonic = check_monotonicity(depths) & check_monotonicity(times)
         return (num_layers <= 1) | is_monotonic
+
+    @staticmethod
+    @jit
+    def _calculate_velocity_penalty(
+        chromosome: jnp.ndarray, epsilon: float
+    ) -> jnp.ndarray:
+        """
+        Calculates a penalty score based on the number of velocity reversals.
+        The idea is to penalize profiles where the interval velocity decreases with depth.
+
+        Args:
+            chromosome (jnp.ndarray): The chromosome array representing a profile.
+            epsilon (float): A small value to prevent division by zero.
+
+        Returns:
+            jnp.ndarray: The penalty score (number of velocity reversals) as a scalar array.
+        """
+        depths = chromosome[::2]
+        times = chromosome[1::2]  # These are two-way times
+
+        # Filter for active layers and add the origin for diff calculation
+        mask = depths > 0
+        num_layers = jnp.sum(mask)
+
+        # --- Sort active layers to the front to avoid dynamic slicing ---
+        # To handle active/inactive layers without changing array sizes, we sort them.
+        # Inactive layers are given an infinite sort key to push them to the end.
+        sort_keys = jnp.where(mask, depths, jnp.inf)
+        sorted_indices = jnp.argsort(sort_keys)
+
+        # Apply the sorting to depths and times
+        sorted_depths = depths[sorted_indices]
+        sorted_times = times[sorted_indices]
+
+        # --- Calculate properties using fixed-size arrays ---
+        # Prepend the origin (0, 0) for the first layer's calculation.
+        # `jnp.pad` maintains a static array size.
+        padded_depths = jnp.pad(sorted_depths, (1, 0))
+        padded_times = jnp.pad(sorted_times, (1, 0))
+
+        # Calculate properties for each layer
+        thicknesses = jnp.diff(padded_depths)
+        # Convert two-way travel time (TTS) to one-way for velocity calculation
+        one_way_times = jnp.diff(padded_times) / 2.0
+
+        velocities = thicknesses / (one_way_times + epsilon)
+
+        # Find the differences between adjacent layer velocities
+        velocity_diffs = jnp.diff(velocities)
+
+        # --- Mask results to count reversals only for active layers ---
+        # A velocity difference is valid only if it's between two active layers.
+        # The number of valid velocity differences is `num_layers - 1`.
+        # This mask is correct even if num_layers is 0 or 1 (it becomes all False).
+        diff_mask = jnp.arange(velocity_diffs.shape[0]) < num_layers - 1
+
+        # Count reversals where velocity decreases (diff < 0), using the mask
+        # to only consider valid differences.
+        num_reversals = jnp.sum(jnp.where(diff_mask, velocity_diffs < 0, 0.0))
+
+        return num_reversals.astype(float)
+
+    @staticmethod
+    @jit
+    def _calculate_thickness_penalty(
+        chromosome: jnp.ndarray, min_thickness: float = 5.00
+    ) -> jnp.ndarray:
+        """
+        Calculates a JAX-compatible penalty for layers thinner than a minimum threshold.
+
+        This version is JIT-compatible because it avoids Python control flow (`if`)
+        and dynamic slicing that would create arrays of non-static size.
+
+        Args:
+            chromosome (jnp.ndarray): The chromosome array [d1, t1, d2, t2, ...].
+            min_thickness (float): Minimum allowable thickness for a layer.
+
+        Returns:
+            jnp.ndarray: The penalty score (a scalar array).
+        """
+        depths = chromosome[::2]
+
+        # Create a mask for active layers (where depth > 0)
+        mask = depths > 0
+        num_layers = jnp.sum(mask)
+
+        # --- Sort active layers to the front to avoid dynamic slicing ---
+        # Inactive layers are given an infinite sort key to push them to the end.
+        sort_keys = jnp.where(mask, depths, jnp.inf)
+        sorted_indices = jnp.argsort(sort_keys)
+        sorted_depths = depths[sorted_indices]
+
+        # --- Calculate thicknesses using fixed-size arrays ---
+        # Prepend the origin (0) to calculate the first layer's thickness.
+        # `jnp.pad` maintains a static array size.
+        padded_depths = jnp.pad(sorted_depths, (1, 0))
+
+        # Calculate thicknesses for all potential layers
+        thicknesses = jnp.diff(padded_depths)
+
+        # --- Mask results to penalize only active layers ---
+        # A thickness is valid only if it corresponds to an active layer.
+        # The number of valid thicknesses is `num_layers`.
+        thickness_mask = jnp.arange(thicknesses.shape[0]) < num_layers
+
+        # A layer is penalized if it's both active AND thinner than the minimum.
+        is_thin = thicknesses < min_thickness
+
+        # We use jnp.logical_and to combine the conditions before summing.
+        num_thin_layers = jnp.sum(jnp.logical_and(thickness_mask, is_thin))
+
+        return num_thin_layers.astype(float)
 
     def _create_individual(self, key: random.PRNGKey) -> jnp.ndarray:  # type: ignore
         """Creates a single random, valid individual chromosome."""
@@ -207,10 +349,25 @@ class GeneticAlgorithm:
         layers_score = self._kde_jax(num_layers, self.real_num_layers, 0.5)
         dist_fitness = jnp.mean(jnp.array([depth_score, layers_score]))
 
+        # ✨ 4. NEW: Calculate physical penalties ✨
+        velocity_penalty = self._calculate_velocity_penalty(chromosome, self.epsilon)
+        thickness_penalty = self._calculate_thickness_penalty(
+            chromosome, self.config["min_layer_thickness"]
+        )
+
         # Final weighted fitness, gated by validity
         w_shape = self.config["fitness_weight_shape"]
         w_dist = self.config["fitness_weight_dist"]
-        total_fitness = w_shape * shape_fitness + w_dist * dist_fitness
+        w_vel = self.config["fitness_weight_velocity"]  # New weight
+        w_thick = self.config["fitness_weight_thickness"]  # New weight
+
+        # Combine penalties into a single penalty factor
+        total_fitness = (
+            w_shape * shape_fitness
+            + w_dist * dist_fitness
+            - w_vel * velocity_penalty
+            - w_thick * thickness_penalty
+        )
 
         # Return 0 fitness if the profile is not valid
         return jnp.array(jnp.where(is_valid, total_fitness, 0.0))
@@ -299,7 +456,6 @@ class GeneticAlgorithm:
 
             # --- Crossover ---
             self.key, crossover_key, shuffle_key = random.split(self.key, 3)
-            # ✨ IMPROVEMENT: Shuffle parents to ensure random pairing for crossover
             shuffled_parents = random.permutation(shuffle_key, parents, axis=0)
 
             num_pairs = (self.pop_size - num_elites) // 2
