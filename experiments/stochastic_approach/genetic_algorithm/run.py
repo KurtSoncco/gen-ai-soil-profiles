@@ -9,22 +9,28 @@ from soilgen_ai.logging_config import setup_logging
 
 logger = setup_logging()
 
-# Load real data for initialization guidance
-DATA_PATH = Path(__file__).cwd() / "data" / "vspdb_tts_profiles.parquet"
+# Define paths
+CWD = Path(__file__).cwd()
+DATA_PATH = CWD / "data" / "vspdb_tts_profiles.parquet"
+CACHE_PATH = CWD / "data" / "ga_cache.npz"
 
 
 GA_CONFIG = {
     "seed": 42,  # Random seed for reproducibility
     "pop_size": 5000,  # Population size
     "generations": 200,  # Number of generations to run
-    "max_layers": 25,  # Maximum number of layers in the profile
-    "max_allowable_depth": 2000.0,  # in meters
-    "num_elites": 2,  # Number of best individuals to keep
-    "tournament_size": 10,  # Number of individuals in each tournament
-    "mutation_rate": 0.15,  # Probability of mutating a gene
-    "mutation_sigma": 0.05,  # Std dev of Gaussian noise for mutation
-    "fitness_weight_shape": 0.6,
-    "fitness_weight_dist": 0.4,
+    "max_layers": 30,  # Maximum number of layers in the profile
+    "min_layer_thickness": 1.0,  # in meters
+    "max_allowable_depth": 2000.0,  # in meters, cached to avoid unphysical solutions
+    "num_elites": 10,  # Number of best individuals to keep
+    "tournament_size": 200,  # Number of individuals in each tournament
+    "mutation_rate": 0.5,  # Probability of mutating a gene
+    "mutation_sigma": 0.5,  # Std dev of Gaussian noise for mutation
+    "fitness_weight_shape": 0.9,  # Weight for shape penalty
+    "fitness_weight_dist": 0.9,  # Weight for data misfit
+    "fitness_weight_velocity": 0.9,  # New weight for velocity penalty
+    "fitness_weight_thickness": 0.9,  # New weight for thickness penalty
+    "cache_path": CACHE_PATH,  # Path to cache preprocessed data
 }
 
 # Ensure the data directory exists
