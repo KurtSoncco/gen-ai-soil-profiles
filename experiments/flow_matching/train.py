@@ -226,9 +226,23 @@ def main() -> None:
                 # Generate and save samples
                 with torch.no_grad():
                     model.eval()
-                    samples = utils_mod.sample_ffm(
-                        model, z_fixed, cfg.ode_steps, device
-                    )
+                    
+                    # Choose sampler based on configuration
+                    if cfg.use_pcfm:
+                        samples = utils_mod.sample_ffm_pcfm(
+                            model, 
+                            z_fixed, 
+                            cfg.ode_steps, 
+                            device,
+                            guidance_strength=cfg.pcfm_guidance_strength,
+                            monotonic_weight=cfg.pcfm_monotonic_weight,
+                            positivity_weight=cfg.pcfm_positivity_weight
+                        )
+                    else:
+                        samples = utils_mod.sample_ffm(
+                            model, z_fixed, cfg.ode_steps, device
+                        )
+                    
                     model.train()
 
                     # Denormalize samples
@@ -298,7 +312,21 @@ def main() -> None:
     # Generate final samples
     with torch.no_grad():
         model.eval()
-        samples = utils_mod.sample_ffm(model, z_fixed, cfg.ode_steps, device)
+        
+        # Choose sampler based on configuration
+        if cfg.use_pcfm:
+            samples = utils_mod.sample_ffm_pcfm(
+                model, 
+                z_fixed, 
+                cfg.ode_steps, 
+                device,
+                guidance_strength=cfg.pcfm_guidance_strength,
+                monotonic_weight=cfg.pcfm_monotonic_weight,
+                positivity_weight=cfg.pcfm_positivity_weight
+            )
+        else:
+            samples = utils_mod.sample_ffm(model, z_fixed, cfg.ode_steps, device)
+        
         samples_denorm = dataset.denormalize_batch(samples)
         np.save(
             os.path.join(cfg.out_dir, "samples_final.npy"), samples_denorm.cpu().numpy()
@@ -306,6 +334,66 @@ def main() -> None:
 
     print(f"Training completed! Final loss: {loss_history[-1]:.6f}")
     print(f"Checkpoints saved to: {cfg.out_dir}")
+
+    # Generate comprehensive comparison plot for final epoch and log to wandb
+    if wandb is not None:
+        print("Generating comprehensive comparison plot for final epoch...")
+        try:
+            # Load some real data for comparison (same number as generated samples)
+            loader_real, _, _ = create_dataloader(cfg.batch_size, cfg.num_workers, shuffle=False)
+            real_profiles = []
+            for i, batch in enumerate(loader_real):
+                real_denorm = dataset.denormalize_batch(batch)
+                real_profiles.append(real_denorm.numpy())
+                if len(real_profiles) * cfg.batch_size >= cfg.num_samples:  # Match generated samples
+                    break
+            real_profiles = np.concatenate(real_profiles, axis=0)
+            # Ensure we have exactly the same number as generated samples
+            real_profiles = real_profiles[:cfg.num_samples]
+            
+            # Generate final samples for comparison
+            with torch.no_grad():
+                model.eval()
+                if cfg.use_pcfm:
+                    final_samples = utils_mod.sample_ffm_pcfm(
+                        model, 
+                        z_fixed, 
+                        cfg.ode_steps, 
+                        device,
+                        guidance_strength=cfg.pcfm_guidance_strength,
+                        monotonic_weight=cfg.pcfm_monotonic_weight,
+                        positivity_weight=cfg.pcfm_positivity_weight
+                    )
+                else:
+                    final_samples = utils_mod.sample_ffm(model, z_fixed, cfg.ode_steps, device)
+                final_samples_denorm = dataset.denormalize_batch(final_samples)
+                generated_profiles = final_samples_denorm.cpu().numpy()
+            
+            # Create comprehensive comparison plot
+            utils_mod.plot_comprehensive_comparison(
+                real_profiles,
+                generated_profiles,
+                cfg.out_dir,
+                step,
+                max_profiles=20,
+                avg_samples_per_meter=avg_samples_per_meter
+            )
+            
+            # Log the plot to wandb
+            plot_path = os.path.join(cfg.out_dir, f"comprehensive_comparison_step_{step}.png")
+            if os.path.exists(plot_path):
+                wandb.log({
+                    "step": step,
+                    "final_comprehensive_comparison": wandb.Image(plot_path)
+                })
+                print(f"Comprehensive comparison plot logged to wandb: {plot_path}")
+            else:
+                print(f"Warning: Comprehensive comparison plot not found at {plot_path}")
+                
+        except Exception as e:
+            print(f"Error generating comprehensive comparison plot: {e}")
+            import traceback
+            traceback.print_exc()
 
     # Finish wandb run
     if wandb is not None:

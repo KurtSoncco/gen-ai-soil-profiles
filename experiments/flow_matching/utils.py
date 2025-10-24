@@ -132,7 +132,9 @@ def compute_vs30(profile: np.ndarray, depth_step: float = 0.5) -> float:
     layer_thicknesses = np.diff(np.concatenate([[0], depths_30m]))
 
     # Calculate travel time for each layer
-    travel_times = layer_thicknesses / profile_30m[:-1]  # Exclude last point
+    # Use the same length for both arrays
+    min_len = min(len(layer_thicknesses), len(profile_30m))
+    travel_times = layer_thicknesses[:min_len] / profile_30m[:min_len]
 
     # Vs30 = 30 / total_travel_time
     total_travel_time = np.sum(travel_times)
@@ -508,6 +510,308 @@ def sample_ffm(model, initial_noise, ode_steps, device):
         u = u + v_pred * dt
 
     return u
+
+
+def sample_ffm_pcfm(
+    model, 
+    initial_noise, 
+    ode_steps, 
+    device,
+    guidance_strength=1.0,
+    monotonic_weight=1.0,
+    positivity_weight=1.0,
+    smoothness_weight=0.1,
+    vs_range_min=50.0,
+    vs_range_max=2000.0
+):
+    """
+    Sample from FFM model using Physics-Constrained Flow Matching guidance.
+    
+    This sampler applies physics constraints during the ODE integration process:
+    1. Positivity: Vs values must be positive (Vs > 0)
+    2. Monotonicity: Vs generally increases with depth (realistic soil behavior)
+    3. Smoothness: Avoid sharp discontinuities in Vs profiles
+    4. Range constraints: Vs values within realistic range (50-2000 m/s)
+    
+    Args:
+        model: Trained FFM model
+        initial_noise: Initial noise tensor
+        ode_steps: Number of ODE integration steps
+        device: PyTorch device
+        guidance_strength: Strength of physics guidance (0.0 = no guidance, 1.0 = full guidance)
+        monotonic_weight: Weight for monotonicity constraint
+        positivity_weight: Weight for positivity constraint
+        smoothness_weight: Weight for smoothness constraint
+        vs_range_min: Minimum realistic Vs value (m/s)
+        vs_range_max: Maximum realistic Vs value (m/s)
+    
+    Returns:
+        Generated samples with physics constraints applied
+    """
+    model.eval()
+    u = initial_noise.to(device)
+    dt = 1.0 / ode_steps
+
+    for i in range(ode_steps):
+        # Current time
+        t_val = i * dt
+        t = torch.full((u.shape[0], 1), t_val).to(device)
+        
+        # Make `u` require gradients for the guidance step
+        u = u.detach().requires_grad_(True)
+
+        # 1. Get the model's predicted vector field
+        with torch.no_grad():
+            v_pred = model(u, t)
+
+        # 2. Calculate physics constraint losses
+        # Constraint 1: Positivity (encourage u > vs_range_min)
+        # Penalize values below minimum realistic Vs
+        vs_min_tensor = torch.tensor(vs_range_min, device=device, requires_grad=True)
+        loss_positivity = torch.mean(torch.relu(vs_min_tensor - u))
+        
+        # Constraint 2: Range constraint (encourage vs_range_min < u < vs_range_max)
+        # Penalize values above maximum realistic Vs
+        vs_max_tensor = torch.tensor(vs_range_max, device=device, requires_grad=True)
+        loss_range_max = torch.mean(torch.relu(u - vs_max_tensor))
+        
+        # Constraint 3: Monotonicity (encourage general increase with depth)
+        # Calculate depth-wise differences
+        diff = u[..., 1:] - u[..., :-1]
+        # Penalize negative trends (decreasing Vs with depth)
+        loss_monotonic = torch.mean(torch.relu(-diff))
+        
+        # Constraint 4: Smoothness (avoid sharp discontinuities)
+        # Penalize large second derivatives
+        loss_smoothness = torch.tensor(0.0, device=device, requires_grad=True)
+        if u.shape[-1] > 2:
+            second_diff = u[..., 2:] - 2 * u[..., 1:-1] + u[..., :-2]
+            loss_smoothness = torch.mean(torch.abs(second_diff))
+        
+        # Total physics loss
+        loss_physics = (positivity_weight * loss_positivity + 
+                       positivity_weight * loss_range_max +
+                       monotonic_weight * loss_monotonic +
+                       smoothness_weight * loss_smoothness)
+
+        # 3. Apply physics guidance if loss is significant
+        if loss_physics.item() > 1e-6:  # Use small threshold to avoid numerical issues
+            try:
+                # Get the gradient of the physics loss w.r.t. the current sample `u`
+                (grad_u,) = torch.autograd.grad(loss_physics, u, retain_graph=False)
+
+                # Define the guidance vector (opposite direction to minimize loss)
+                v_guidance = -grad_u
+                
+                # Combine the model's vector field with the guidance vector
+                # Scale guidance to match the magnitude of the predicted vector field
+                v_pred_norm = v_pred.norm(dim=(1, 2), keepdim=True)
+                v_guidance_norm = v_guidance.norm(dim=(1, 2), keepdim=True)
+                
+                # Normalize guidance and re-scale by v_pred magnitude
+                v_guidance_scaled = (v_guidance / (v_guidance_norm + 1e-8)) * v_pred_norm
+
+                v_corrected = v_pred + v_guidance_scaled * guidance_strength
+            except RuntimeError:
+                # If gradient computation fails, fall back to original vector field
+                v_corrected = v_pred
+        else:
+            # No constraints violated, no guidance needed
+            v_corrected = v_pred
+
+        # 6. Take the Euler step using the corrected vector field
+        u = u.detach()  # Stop tracking gradients for the next step
+        u = u + v_corrected * dt
+
+    return u.detach()
+
+
+def plot_comprehensive_comparison(
+    real_profiles: np.ndarray,
+    generated_profiles: np.ndarray,
+    output_dir: str,
+    step: int,
+    max_profiles: int = 20,
+    avg_samples_per_meter: float = 2.0
+) -> None:
+    """
+    Create comprehensive comparison plots.
+
+    Args:
+        real_profiles: Real profiles array (denormalized)
+        generated_profiles: Generated profiles array (denormalized)
+        output_dir: Directory to save the plot
+        step: Training step
+        max_profiles: Maximum number of profiles to plot
+        avg_samples_per_meter: Average samples per meter for depth calculation
+    """
+    import matplotlib.pyplot as plt
+    from scipy import stats
+    from sklearn.metrics import mean_squared_error
+    
+    # Set up the plot
+    plt.figure(figsize=(20, 12))
+
+    # Calculate metrics
+    real_vs30 = compute_vs30_distribution(real_profiles)
+    gen_vs30 = compute_vs30_distribution(generated_profiles)
+    real_vs100 = compute_vs100(real_profiles, avg_samples_per_meter)
+    gen_vs100 = compute_vs100(generated_profiles, avg_samples_per_meter)
+
+    # Calculate depths
+    depths = np.arange(real_profiles.shape[-1]) / avg_samples_per_meter
+
+    # 1. Profile comparison (top row)
+    ax1 = plt.subplot(2, 3, 1)
+
+    # Plot real profiles
+    for i in range(min(max_profiles, real_profiles.shape[0])):
+        ax1.plot(real_profiles[i, 0, :], depths, "b-", alpha=0.3, linewidth=0.5)
+
+    # Plot generated profiles
+    for i in range(min(max_profiles, generated_profiles.shape[0])):
+        ax1.plot(
+            generated_profiles[i, 0, :], depths, "r-", alpha=0.3, linewidth=0.5
+        )
+
+    ax1.set_title("Profile Comparison")
+    ax1.set_xlabel("Vs (m/s)")
+    ax1.set_ylabel("Depth (m)")
+    ax1.invert_yaxis()
+    ax1.grid(True, alpha=0.3)
+
+    # 2. Mean profile comparison
+    ax2 = plt.subplot(2, 3, 2)
+
+    real_mean = np.mean(real_profiles[:, 0, :], axis=0)
+    real_std = np.std(real_profiles[:, 0, :], axis=0)
+    gen_mean = np.mean(generated_profiles[:, 0, :], axis=0)
+    gen_std = np.std(generated_profiles[:, 0, :], axis=0)
+
+    ax2.plot(real_mean, depths, "b-", label="Real Mean", linewidth=2)
+    ax2.fill_betweenx(
+        depths, real_mean - real_std, real_mean + real_std, alpha=0.3, color="blue"
+    )
+
+    ax2.plot(gen_mean, depths, "r-", label="Generated Mean", linewidth=2)
+    ax2.fill_betweenx(
+        depths, gen_mean - gen_std, gen_mean + gen_std, alpha=0.3, color="red"
+    )
+
+    ax2.set_title("Mean Profile Comparison")
+    ax2.set_xlabel("Vs (m/s)")
+    ax2.set_ylabel("Depth (m)")
+    ax2.invert_yaxis()
+    ax2.legend()
+    ax2.grid(True, alpha=0.3)
+
+    # 3. Vs30 comparison
+    ax3 = plt.subplot(2, 3, 3)
+    ks_vs30 = stats.ks_2samp(real_vs30, gen_vs30).statistic  # type: ignore
+
+    ax3.hist(
+        real_vs30, bins=30, alpha=0.7, label="Real", density=True, color="blue"
+    )
+    ax3.hist(
+        gen_vs30, bins=30, alpha=0.7, label="Generated", density=True, color="red"
+    )
+
+    ax3.set_title(f"Vs30 Distribution\nKS: {ks_vs30:.4f}")
+    ax3.set_xlabel("Vs30 (m/s)")
+    ax3.set_ylabel("Density")
+    ax3.legend()
+    ax3.grid(True, alpha=0.3)
+
+    # 4. Vs100 comparison
+    ax4 = plt.subplot(2, 3, 4)
+    ks_vs100 = stats.ks_2samp(real_vs100, gen_vs100).statistic  # type: ignore
+
+    ax4.hist(
+        real_vs100, bins=30, alpha=0.7, label="Real", density=True, color="blue"
+    )
+    ax4.hist(
+        gen_vs100, bins=30, alpha=0.7, label="Generated", density=True, color="red"
+    )
+
+    ax4.set_title(f"Vs100 Distribution\nKS: {ks_vs100:.4f}")
+    ax4.set_xlabel("Vs100 (m/s)")
+    ax4.set_ylabel("Density")
+    ax4.legend()
+    ax4.grid(True, alpha=0.3)
+
+    # 5. Gradient comparison
+    ax5 = plt.subplot(2, 3, 5)
+
+    real_gradients = np.gradient(real_profiles[:, 0, :], axis=1)
+    gen_gradients = np.gradient(generated_profiles[:, 0, :], axis=1)
+
+    real_grad_mean = np.mean(real_gradients, axis=0)
+    gen_grad_mean = np.mean(gen_gradients, axis=0)
+
+    # Ensure dimensions match for plotting
+    min_len = min(len(real_grad_mean), len(gen_grad_mean), len(depths))
+    ax5.plot(
+        real_grad_mean[:min_len], depths[:min_len], "b-", label="Real", linewidth=2
+    )
+    ax5.plot(
+        gen_grad_mean[:min_len],
+        depths[:min_len],
+        "r-",
+        label="Generated",
+        linewidth=2,
+    )
+
+    ax5.set_title("Velocity Gradients")
+    ax5.set_xlabel("dV/dz (m/s/m)")
+    ax5.set_ylabel("Depth (m)")
+    ax5.invert_yaxis()
+    ax5.legend()
+    ax5.grid(True, alpha=0.3)
+
+    # 6. Statistics summary
+    ax6 = plt.subplot(2, 3, 6)
+    ax6.axis("off")
+
+    # Calculate summary statistics
+    profile_mse = mean_squared_error(real_mean, gen_mean)
+    vs30_mse = mean_squared_error(real_vs30, gen_vs30)
+    vs100_mse = mean_squared_error(real_vs100, gen_vs100)
+
+    stats_text = f"""Statistics Summary (Step {step})
+        
+Profile MSE: {profile_mse:.4f}
+Vs30 MSE: {vs30_mse:.4f}
+Vs100 MSE: {vs100_mse:.4f}
+
+Vs30 KS: {ks_vs30:.4f}
+Vs100 KS: {ks_vs100:.4f}
+
+Real Vs30: {np.mean(real_vs30):.1f} ± {np.std(real_vs30):.1f}
+Gen Vs30: {np.mean(gen_vs30):.1f} ± {np.std(gen_vs30):.1f}
+
+Real Vs100: {np.mean(real_vs100):.1f} ± {np.std(real_vs100):.1f}
+Gen Vs100: {np.mean(gen_vs100):.1f} ± {np.std(gen_vs100):.1f}
+"""
+
+    ax6.text(
+        0.1,
+        0.9,
+        stats_text,
+        transform=ax6.transAxes,
+        fontsize=10,
+        verticalalignment="top",
+        fontfamily="monospace",
+    )
+
+    plt.tight_layout()
+    
+    # Save the plot
+    os.makedirs(output_dir, exist_ok=True)
+    save_path = os.path.join(output_dir, f"comprehensive_comparison_step_{step}.png")
+    plt.savefig(save_path, dpi=300, bbox_inches="tight")
+    plt.close()
+
+    print(f"Comprehensive comparison plot saved to {save_path}")
 
 
 if __name__ == "__main__":

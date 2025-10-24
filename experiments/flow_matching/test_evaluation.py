@@ -148,11 +148,30 @@ def test_evaluation_metrics():
     initial_noise = torch.randn(4, 1, max_length).to(device)
     with torch.no_grad():
         model.eval()
-        samples = sample_ffm(model, initial_noise, cfg.ode_steps, device)
+        
+        # Test both regular and PCFM sampling
+        samples_regular = sample_ffm(model, initial_noise, cfg.ode_steps, device)
+        
+        # Test PCFM sampling if available
+        try:
+            from experiments.flow_matching.utils import sample_ffm_pcfm
+            samples_pcfm = sample_ffm_pcfm(
+                model, 
+                initial_noise, 
+                cfg.ode_steps, 
+                device,
+                guidance_strength=cfg.pcfm_guidance_strength,
+                monotonic_weight=cfg.pcfm_monotonic_weight,
+                positivity_weight=cfg.pcfm_positivity_weight
+            )
+            print(f"   PCFM samples range: [{samples_pcfm.min().item():.3f}, {samples_pcfm.max().item():.3f}]")
+        except ImportError:
+            print("   PCFM sampler not available")
+        
         model.train()
 
-    print(f"   Generated samples shape: {samples.shape}")
-    print(f"   Sample range: [{samples.min().item():.3f}, {samples.max().item():.3f}]")
+    print(f"   Generated samples shape: {samples_regular.shape}")
+    print(f"   Sample range: [{samples_regular.min().item():.3f}, {samples_regular.max().item():.3f}]")
 
     print("\n🎉 All evaluation tests passed!")
     print("\n📝 Evaluation Features Implemented:")

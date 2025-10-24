@@ -146,9 +146,20 @@ class FFMEvaluator:
                 )
 
                 # Generate samples using ODE solver
-                samples_normalized = utils_mod.sample_ffm(
-                    model, initial_noise, self.config.ode_steps, self.device
-                )
+                if self.config.use_pcfm:
+                    samples_normalized = utils_mod.sample_ffm_pcfm(
+                        model, 
+                        initial_noise, 
+                        self.config.ode_steps, 
+                        self.device,
+                        guidance_strength=self.config.pcfm_guidance_strength,
+                        monotonic_weight=self.config.pcfm_monotonic_weight,
+                        positivity_weight=self.config.pcfm_positivity_weight
+                    )
+                else:
+                    samples_normalized = utils_mod.sample_ffm(
+                        model, initial_noise, self.config.ode_steps, self.device
+                    )
                 
                 # Denormalize samples before returning
                 samples_denorm = self.dataset.denormalize_batch(samples_normalized)

@@ -36,6 +36,12 @@ class Config:
     # FFM Sampling
     ode_steps: int = 100  # number of ODE integration steps for sampling
     num_samples: int = 16  # number of samples to generate during evaluation
+    
+    # PCFM (Physics-Constrained Flow Matching) Configuration
+    use_pcfm: bool = True  # whether to use PCFM sampler instead of regular FFM
+    pcfm_guidance_strength: float = 1.0  # strength of physics guidance
+    pcfm_monotonic_weight: float = 1.0  # weight for monotonicity constraint
+    pcfm_positivity_weight: float = 1.0  # weight for positivity constraint
 
     # IO
     out_dir: str = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "outputs", "flow_matching"))
