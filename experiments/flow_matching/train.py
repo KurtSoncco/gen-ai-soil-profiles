@@ -84,8 +84,16 @@ def train_ffm_step(model, optimizer, batch, config):
     # ut = (1-t)*u0 + t*u1
     ut = (1 - t_broadcast) * u0 + t_broadcast * u1
 
-    # target_v: The target vector field (u1 - u0)
-    target_v = u1 - u0
+    # target_v: The target vector field using proper flow matching
+    # For flow matching, we use the conditional flow: v_t = u1 - u0
+    # But we can also use a more sophisticated path like:
+    # v_t = (u1 - ut) / (1 - t) when t < 1, else 0
+    # This ensures the flow points towards the target at all times
+    target_v = torch.where(
+        t_broadcast < 0.999,  # Avoid division by zero
+        (u1 - ut) / torch.clamp(1 - t_broadcast, min=1e-6),
+        torch.zeros_like(u1)
+    )
 
     # --- Forward pass ---
     predicted_v = model(ut, t)
@@ -153,13 +161,35 @@ def main() -> None:
     # Fixed samples for evaluation
     z_fixed = torch.randn(cfg.num_samples, 1, max_length).to(device)
 
+    print(f"Starting training for {cfg.num_steps} steps...")
+    print(f"Dataset size: {len(dataset)} profiles")
+    print(f"Batches per epoch: {len(loader)}")
+    
+    # Create a fresh dataloader iterator
+    dataloader_iter = iter(loader)
+    
+    pbar = tqdm(total=cfg.num_steps, desc="Training FFM")
+    
     while step < cfg.num_steps:
-        pbar = tqdm(total=cfg.num_steps - step, desc="Training FFM", leave=False)
-        for batch in loader:
-            total_loss, mse_loss, tvd_loss = train_ffm_step(
-                model, optimizer, batch, cfg
-            )
-            loss_history.append(total_loss)
+        try:
+            # Get next batch, restart dataloader if needed
+            try:
+                batch = next(dataloader_iter)
+            except StopIteration:
+                print(f"Restarting dataloader at step {step}")
+                dataloader_iter = iter(loader)
+                batch = next(dataloader_iter)
+            
+            try:
+                total_loss, mse_loss, tvd_loss = train_ffm_step(
+                    model, optimizer, batch, cfg
+                )
+                loss_history.append(total_loss)
+            except Exception as e:
+                print(f"Error in training step {step}: {e}")
+                import traceback
+                traceback.print_exc()
+                break
 
             # Log to wandb
             if wandb is not None:
@@ -232,6 +262,7 @@ def main() -> None:
                     real_vs30,
                     avg_samples_per_meter,
                     max_length,
+                    dataset,
                     wandb,
                 )
 
@@ -243,13 +274,14 @@ def main() -> None:
 
             step += 1
             pbar.update(1)
-            if step >= cfg.num_steps:
-                break
-        pbar.close()
-
-        # Break out of the outer loop when we reach the step limit
-        if step >= cfg.num_steps:
+            
+        except Exception as e:
+            print(f"Error at step {step}: {e}")
+            import traceback
+            traceback.print_exc()
             break
+    
+    pbar.close()
 
     # Save final checkpoint
     checkpoint = {

@@ -26,13 +26,13 @@ try:
     from . import config as cfg_mod
     from . import models as models_mod
     from . import utils as utils_mod
-    from .data import create_dataloader
+    from .data import create_dataloader, VsProfilesDataset
 except Exception:  # fallback when running as script
     import config as cfg_mod
     import models as models_mod
     import utils as utils_mod
 
-    from data import create_dataloader  # type: ignore
+    from data import create_dataloader, VsProfilesDataset  # type: ignore
 
 
 class FFMEvaluator:
@@ -55,11 +55,11 @@ class FFMEvaluator:
         self.plots_dir.mkdir(exist_ok=True)
 
         # Load real data for comparison
-        self.real_data, self.real_vs30, self.avg_samples_per_meter = (
+        self.real_data, self.real_vs30, self.avg_samples_per_meter, self.dataset = (
             self._load_real_data()
         )
 
-    def _load_real_data(self) -> Tuple[np.ndarray, np.ndarray, float]:
+    def _load_real_data(self) -> Tuple[np.ndarray, np.ndarray, float, VsProfilesDataset]:
         """Load real data for comparison."""
         logging.info("Loading real data for comparison...")
 
@@ -70,7 +70,9 @@ class FFMEvaluator:
         real_profiles = []
 
         for real in loader:
-            real_profiles.append(real.numpy())
+            # Denormalize real data for proper comparison
+            real_denorm = dataset.denormalize_batch(real)
+            real_profiles.append(real_denorm.numpy())
             if (
                 len(real_profiles) * self.config.batch_size >= 1000
             ):  # Limit for evaluation
@@ -88,7 +90,7 @@ class FFMEvaluator:
             f"Real Vs30: mean={np.mean(real_vs30):.2f}, std={np.std(real_vs30):.2f}"
         )
 
-        return real_profiles, real_vs30, avg_samples_per_meter
+        return real_profiles, real_vs30, avg_samples_per_meter, dataset
 
     def load_trained_model(self, checkpoint_path: str) -> Tuple[torch.nn.Module, int]:
         """
@@ -128,7 +130,7 @@ class FFMEvaluator:
             n_samples: Number of samples to generate
 
         Returns:
-            Generated samples array
+            Generated samples array (denormalized)
         """
         model.eval()
         generated_samples = []
@@ -144,10 +146,13 @@ class FFMEvaluator:
                 )
 
                 # Generate samples using ODE solver
-                samples = utils_mod.sample_ffm(
+                samples_normalized = utils_mod.sample_ffm(
                     model, initial_noise, self.config.ode_steps, self.device
                 )
-                generated_samples.append(samples.cpu().numpy())
+                
+                # Denormalize samples before returning
+                samples_denorm = self.dataset.denormalize_batch(samples_normalized)
+                generated_samples.append(samples_denorm.cpu().numpy())
 
         return np.concatenate(generated_samples, axis=0)
 

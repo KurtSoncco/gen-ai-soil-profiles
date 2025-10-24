@@ -165,6 +165,7 @@ def log_vs30_metrics(
     real_vs30,
     avg_samples_per_meter,
     max_length,
+    dataset,
     wandb=None,
 ):
     """Log Vs30 metrics and create plots during training."""
@@ -181,8 +182,11 @@ def log_vs30_metrics(
         generated_samples = sample_ffm(model, z_eval, cfg.ode_steps, device)
         model.train()
 
+    # Denormalize samples before computing Vs30
+    generated_samples_denorm = dataset.denormalize_batch(generated_samples)
+    
     # Convert to numpy
-    generated_samples_np = generated_samples.cpu().numpy()
+    generated_samples_np = generated_samples_denorm.cpu().numpy()
 
     # Debug: Print sample statistics
     print(f"[debug] Generated samples shape: {generated_samples_np.shape}")

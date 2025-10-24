@@ -40,7 +40,9 @@ def test_evaluation_metrics():
     # Get some real profiles for testing
     real_profiles = []
     for i, batch in enumerate(loader):
-        real_profiles.append(batch.numpy())
+        # Denormalize real data for proper comparison
+        real_denorm = dataset.denormalize_batch(batch)
+        real_profiles.append(real_denorm.numpy())
         if len(real_profiles) * cfg.batch_size >= 50:  # Limit for testing
             break
     real_profiles = np.concatenate(real_profiles, axis=0)
