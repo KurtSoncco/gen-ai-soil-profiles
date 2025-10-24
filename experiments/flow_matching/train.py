@@ -19,10 +19,30 @@ except ImportError:  # fallback when running as script
     import config as cfg_mod
     import models as models_mod
     import utils as utils_mod
+
     from data import create_dataloader  # type: ignore
 
 # Global wandb variable
 wandb = None
+
+
+def compute_tvd_loss(x):
+    """
+    Compute Total Variation Diminishing (TVD) loss to encourage smoothness.
+
+    Args:
+        x: Tensor of shape (batch_size, channels, length)
+
+    Returns:
+        TVD loss scalar
+    """
+    # Compute differences between adjacent elements along the length dimension
+    diff = torch.abs(x[:, :, 1:] - x[:, :, :-1])
+
+    # Sum over all dimensions except batch
+    tvd_loss = torch.mean(diff)
+
+    return tvd_loss
 
 
 def set_seed(seed: int) -> None:
@@ -35,50 +55,54 @@ def set_seed(seed: int) -> None:
 def train_ffm_step(model, optimizer, batch, config):
     """
     Single FFM training step.
-    
+
     Args:
         model: Neural field model (UNet or FNO)
         optimizer: Adam optimizer
         batch: Real data profiles (Batch, 1, Length)
         config: Configuration object
-    
+
     Returns:
         loss: MSE loss value
     """
     device = config.device
-    
+
     # u1: Real data profile (t=1)
     u1 = batch.to(device)
-    
+
     # u0: Noise profile (t=0)
     u0 = torch.randn_like(u1).to(device)
-    
+
     # t: Random time from [0, 1]
     t = torch.rand(u1.shape[0], 1).to(device)
-    
+
     # Broadcast t for interpolation
     # (Batch, 1) -> (Batch, 1, 1)
     t_broadcast = t.view(-1, 1, 1).expand(-1, 1, u1.shape[-1])
-    
+
     # ut: Interpolated profile at time t
     # ut = (1-t)*u0 + t*u1
     ut = (1 - t_broadcast) * u0 + t_broadcast * u1
-    
+
     # target_v: The target vector field (u1 - u0)
     target_v = u1 - u0
-    
+
     # --- Forward pass ---
     predicted_v = model(ut, t)
-    
+
     # --- Loss calculation ---
-    loss = nn.MSELoss()(predicted_v, target_v)
-    
+    mse_loss = nn.MSELoss()(predicted_v, target_v)
+
+    # Add TVD regularization to encourage smoothness
+    tvd_loss = compute_tvd_loss(predicted_v)
+    total_loss = mse_loss + config.tvd_weight * tvd_loss
+
     # --- Backward pass ---
     optimizer.zero_grad()
-    loss.backward()
+    total_loss.backward()
     optimizer.step()
-    
-    return loss.item()
+
+    return total_loss.item(), mse_loss.item(), tvd_loss.item()
 
 
 def main() -> None:
@@ -110,13 +134,17 @@ def main() -> None:
     loader, max_length, dataset = create_dataloader(cfg.batch_size, cfg.num_workers)
 
     # --- Metrics prep: real Vs30 distribution and samples-per-meter estimate ---
-    real_vs30, avg_samples_per_meter = utils_mod.compute_real_vs30_and_density(cfg.parquet_path)
+    real_vs30, avg_samples_per_meter = utils_mod.compute_real_vs30_and_density(
+        cfg.parquet_path
+    )
 
     # Create model
     model = models_mod.create_model(cfg.model_type, cfg).to(device)
     optimizer = optim.Adam(model.parameters(), lr=cfg.learning_rate)
 
-    print(f"Created {cfg.model_type.upper()} model with {sum(p.numel() for p in model.parameters()):,} parameters")
+    print(
+        f"Created {cfg.model_type.upper()} model with {sum(p.numel() for p in model.parameters()):,} parameters"
+    )
     print(f"Training on {len(dataset)} profiles with max_length={max_length}")
 
     step = 0
@@ -128,19 +156,27 @@ def main() -> None:
     while step < cfg.num_steps:
         pbar = tqdm(total=cfg.num_steps - step, desc="Training FFM", leave=False)
         for batch in loader:
-            loss = train_ffm_step(model, optimizer, batch, cfg)
-            loss_history.append(loss)
+            total_loss, mse_loss, tvd_loss = train_ffm_step(
+                model, optimizer, batch, cfg
+            )
+            loss_history.append(total_loss)
 
             # Log to wandb
             if wandb is not None:
-                wandb.log({
-                    "step": step,
-                    "train/loss": loss,
-                    "train/lr": optimizer.param_groups[0]['lr'],
-                })
+                wandb.log(
+                    {
+                        "step": step,
+                        "train/total_loss": total_loss,
+                        "train/mse_loss": mse_loss,
+                        "train/tvd_loss": tvd_loss,
+                        "train/lr": optimizer.param_groups[0]["lr"],
+                    }
+                )
 
             if step % cfg.log_every == 0:
-                print(f"step={step} loss={loss:.6f}")
+                print(
+                    f"step={step} total_loss={total_loss:.6f} mse_loss={mse_loss:.6f} tvd_loss={tvd_loss:.6f}"
+                )
 
             if step % cfg.checkpoint_every == 0 and step > 0:
                 # Save checkpoint
@@ -153,29 +189,38 @@ def main() -> None:
                     "dataset_min": dataset.min_val,
                     "dataset_max": dataset.max_val,
                 }
-                torch.save(checkpoint, os.path.join(cfg.out_dir, f"checkpoint_{step}.pt"))
+                torch.save(
+                    checkpoint, os.path.join(cfg.out_dir, f"checkpoint_{step}.pt")
+                )
 
                 # Generate and save samples
                 with torch.no_grad():
                     model.eval()
-                    samples = utils_mod.sample_ffm(model, z_fixed, cfg.ode_steps, device)
+                    samples = utils_mod.sample_ffm(
+                        model, z_fixed, cfg.ode_steps, device
+                    )
                     model.train()
-                    
+
                     # Denormalize samples
                     samples_denorm = dataset.denormalize_batch(samples)
-                    
+
                     # Save samples
-                    np.save(os.path.join(cfg.out_dir, f"samples_{step}.npy"), samples_denorm.cpu().numpy())
-                    
+                    np.save(
+                        os.path.join(cfg.out_dir, f"samples_{step}.npy"),
+                        samples_denorm.cpu().numpy(),
+                    )
+
                     # Log sample statistics to wandb
                     if wandb is not None:
-                        wandb.log({
-                            "step": step,
-                            "samples/mean": samples_denorm.mean().item(),
-                            "samples/std": samples_denorm.std().item(),
-                            "samples/min": samples_denorm.min().item(),
-                            "samples/max": samples_denorm.max().item(),
-                        })
+                        wandb.log(
+                            {
+                                "step": step,
+                                "samples/mean": samples_denorm.mean().item(),
+                                "samples/std": samples_denorm.std().item(),
+                                "samples/min": samples_denorm.min().item(),
+                                "samples/max": samples_denorm.max().item(),
+                            }
+                        )
 
                 # Log Vs30 distribution metrics and plot
                 utils_mod.log_vs30_metrics(
@@ -223,7 +268,9 @@ def main() -> None:
         model.eval()
         samples = utils_mod.sample_ffm(model, z_fixed, cfg.ode_steps, device)
         samples_denorm = dataset.denormalize_batch(samples)
-        np.save(os.path.join(cfg.out_dir, "samples_final.npy"), samples_denorm.cpu().numpy())
+        np.save(
+            os.path.join(cfg.out_dir, "samples_final.npy"), samples_denorm.cpu().numpy()
+        )
 
     print(f"Training completed! Final loss: {loss_history[-1]:.6f}")
     print(f"Checkpoints saved to: {cfg.out_dir}")

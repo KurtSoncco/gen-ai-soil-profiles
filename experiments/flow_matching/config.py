@@ -17,7 +17,7 @@ class Config:
     num_workers: int = 2
 
     # Model Architecture
-    model_type: str = "unet"  # "unet" or "fno"
+    model_type: str = "fno"  # "unet" or "fno"
     unet_dim: int = 32  # base dimension for UNet (reduced from 64)
     fno_modes: int = 8  # number of Fourier modes for FNO (reduced from 16)
     fno_width: int = 32  # width of FNO layers (reduced from 64)
@@ -29,6 +29,9 @@ class Config:
     num_steps: int = 100  # number of training steps
     log_every: int = 10  # log every N steps
     checkpoint_every: int = 50  # save checkpoint every N steps
+    
+    # Regularization
+    tvd_weight: float = 0.01  # Total Variation Diminishing regularization weight
     
     # FFM Sampling
     ode_steps: int = 100  # number of ODE integration steps for sampling

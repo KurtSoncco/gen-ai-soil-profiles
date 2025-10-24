@@ -60,7 +60,7 @@ def main():
             cwd=project_root,
             check=True,
         )
-        
+
         assert result is not None
 
         print("✅ Evaluation completed successfully!")
@@ -71,11 +71,17 @@ def main():
         print("Step 3: Generating samples...")
 
         result = subprocess.run(
-            [sys.executable, "-m", "experiments.flow_matching.sample", "--num_samples", "100"],
+            [
+                sys.executable,
+                "-m",
+                "experiments.flow_matching.sample",
+                "--num_samples",
+                "100",
+            ],
             cwd=project_root,
             check=True,
         )
-        
+
         assert result is not None
 
         print("✅ Sampling completed successfully!")
@@ -151,7 +157,9 @@ def create_experiment_summary(script_dir: Path):
                 f.write("\n")
 
         f.write("## FFM Method\n")
-        f.write("Functional Flow Matching learns a vector field v_θ(u, t) that transforms noise ")
+        f.write(
+            "Functional Flow Matching learns a vector field v_θ(u, t) that transforms noise "
+        )
         f.write("into realistic profiles through ODE integration:\n\n")
         f.write("```\n")
         f.write("du/dt = v_θ(u, t)\n")

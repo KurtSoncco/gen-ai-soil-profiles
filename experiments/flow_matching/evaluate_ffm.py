@@ -31,6 +31,7 @@ except Exception:  # fallback when running as script
     import config as cfg_mod
     import models as models_mod
     import utils as utils_mod
+
     from data import create_dataloader  # type: ignore
 
 
@@ -104,7 +105,9 @@ class FFMEvaluator:
         checkpoint = torch.load(checkpoint_path, map_location=self.device)
 
         # Create model
-        model = models_mod.create_model(self.config.model_type, self.config).to(self.device)
+        model = models_mod.create_model(self.config.model_type, self.config).to(
+            self.device
+        )
 
         model.load_state_dict(checkpoint["model"])
         model.eval()
@@ -136,10 +139,14 @@ class FFMEvaluator:
                     self.config.batch_size, n_samples - len(generated_samples)
                 )
                 # Create initial noise
-                initial_noise = torch.randn(batch_size, 1, self.real_data.shape[-1]).to(self.device)
-                
+                initial_noise = torch.randn(batch_size, 1, self.real_data.shape[-1]).to(
+                    self.device
+                )
+
                 # Generate samples using ODE solver
-                samples = utils_mod.sample_ffm(model, initial_noise, self.config.ode_steps, self.device)
+                samples = utils_mod.sample_ffm(
+                    model, initial_noise, self.config.ode_steps, self.device
+                )
                 generated_samples.append(samples.cpu().numpy())
 
         return np.concatenate(generated_samples, axis=0)
@@ -231,8 +238,8 @@ class FFMEvaluator:
 
         comparison["vs30_mse"] = mean_squared_error(real_vs30, gen_vs30)
         comparison["vs30_mae"] = mean_absolute_error(real_vs30, gen_vs30)
-        comparison["vs30_ks_statistic"] = stats.ks_2samp(real_vs30, gen_vs30).statistic # type: ignore
-        comparison["vs30_ks_pvalue"] = stats.ks_2samp(real_vs30, gen_vs30).pvalue # type: ignore
+        comparison["vs30_ks_statistic"] = stats.ks_2samp(real_vs30, gen_vs30).statistic  # type: ignore
+        comparison["vs30_ks_pvalue"] = stats.ks_2samp(real_vs30, gen_vs30).pvalue  # type: ignore
 
         # Vs100 comparison
         real_vs100 = self.calculate_vs100(real_profiles)
@@ -242,8 +249,8 @@ class FFMEvaluator:
         comparison["vs100_mae"] = mean_absolute_error(real_vs100, gen_vs100)
         comparison["vs100_ks_statistic"] = stats.ks_2samp(
             real_vs100, gen_vs100
-        ).statistic # type: ignore
-        comparison["vs100_ks_pvalue"] = stats.ks_2samp(real_vs100, gen_vs100).pvalue # type: ignore
+        ).statistic  # type: ignore
+        comparison["vs100_ks_pvalue"] = stats.ks_2samp(real_vs100, gen_vs100).pvalue  # type: ignore
 
         # Store statistics
         comparison["real_stats"] = real_stats
@@ -329,7 +336,7 @@ class FFMEvaluator:
         )
 
         # Calculate KS statistic
-        ks_stat = stats.ks_2samp(real_vs30, generated_vs30).statistic # type: ignore
+        ks_stat = stats.ks_2samp(real_vs30, generated_vs30).statistic  # type: ignore
 
         plt.xlabel("Vs30 (m/s)")
         plt.ylabel("Density")
@@ -378,7 +385,7 @@ class FFMEvaluator:
         )
 
         # Calculate KS statistic
-        ks_stat = stats.ks_2samp(real_vs100, generated_vs100).statistic # type: ignore
+        ks_stat = stats.ks_2samp(real_vs100, generated_vs100).statistic  # type: ignore
 
         plt.xlabel("Vs100 (m/s)")
         plt.ylabel("Density")
@@ -410,12 +417,14 @@ class FFMEvaluator:
             save_path: Path to save the plot
         """
         if save_path is None:
-            save_path = str(self.plots_dir / f"comprehensive_comparison_step_{step}.png")
+            save_path = str(
+                self.plots_dir / f"comprehensive_comparison_step_{step}.png"
+            )
 
         logging.info("Creating comprehensive comparison plots...")
 
         # Set up the plot
-        fig = plt.figure(figsize=(20, 12))
+        plt.figure(figsize=(20, 12))
 
         # Calculate metrics
         real_vs30 = self.calculate_vs30(real_profiles)
@@ -470,7 +479,7 @@ class FFMEvaluator:
 
         # 3. Vs30 comparison
         ax3 = plt.subplot(2, 3, 3)
-        ks_vs30 = stats.ks_2samp(real_vs30, gen_vs30).statistic # type: ignore
+        ks_vs30 = stats.ks_2samp(real_vs30, gen_vs30).statistic  # type: ignore
 
         ax3.hist(
             real_vs30, bins=30, alpha=0.7, label="Real", density=True, color="blue"
@@ -487,7 +496,7 @@ class FFMEvaluator:
 
         # 4. Vs100 comparison
         ax4 = plt.subplot(2, 3, 4)
-        ks_vs100 = stats.ks_2samp(real_vs100, gen_vs100).statistic # type: ignore
+        ks_vs100 = stats.ks_2samp(real_vs100, gen_vs100).statistic  # type: ignore
 
         ax4.hist(
             real_vs100, bins=30, alpha=0.7, label="Real", density=True, color="blue"
@@ -513,8 +522,16 @@ class FFMEvaluator:
 
         # Ensure dimensions match for plotting
         min_len = min(len(real_grad_mean), len(gen_grad_mean), len(depths))
-        ax5.plot(real_grad_mean[:min_len], depths[:min_len], "b-", label="Real", linewidth=2)
-        ax5.plot(gen_grad_mean[:min_len], depths[:min_len], "r-", label="Generated", linewidth=2)
+        ax5.plot(
+            real_grad_mean[:min_len], depths[:min_len], "b-", label="Real", linewidth=2
+        )
+        ax5.plot(
+            gen_grad_mean[:min_len],
+            depths[:min_len],
+            "r-",
+            label="Generated",
+            linewidth=2,
+        )
 
         ax5.set_title("Velocity Gradients")
         ax5.set_xlabel("dV/dz (m/s/m)")
@@ -584,7 +601,9 @@ Gen Vs100: {np.mean(gen_vs100):.1f} ± {np.std(gen_vs100):.1f}
 
         # Compare with real data
         comparison = self.compare_profiles(
-            self.real_data, generated_profiles, f"ffm_{self.config.model_type}_step_{step}"
+            self.real_data,
+            generated_profiles,
+            f"ffm_{self.config.model_type}_step_{step}",
         )
 
         # Create plots
@@ -616,7 +635,11 @@ Gen Vs100: {np.mean(gen_vs100):.1f} ± {np.std(gen_vs100):.1f}
         logging.info("Evaluating all checkpoints...")
 
         checkpoint_files = list(self.results_dir.glob("checkpoint_*.pt"))
-        checkpoint_files.sort(key=lambda x: int(x.stem.split("_")[1]) if x.stem != "checkpoint_final" else float('inf'))
+        checkpoint_files.sort(
+            key=lambda x: int(x.stem.split("_")[1])
+            if x.stem != "checkpoint_final"
+            else float("inf")
+        )
 
         if not checkpoint_files:
             logging.warning("No checkpoint files found!")
@@ -662,7 +685,11 @@ def main():
         return
 
     # Sort by step number and get the latest
-    checkpoint_files.sort(key=lambda x: int(x.stem.split("_")[1]) if x.stem != "checkpoint_final" else float('inf'))
+    checkpoint_files.sort(
+        key=lambda x: int(x.stem.split("_")[1])
+        if x.stem != "checkpoint_final"
+        else float("inf")
+    )
     latest_checkpoint = checkpoint_files[-1]
 
     logging.info(f"Evaluating latest checkpoint: {latest_checkpoint}")

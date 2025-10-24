@@ -17,7 +17,7 @@ __all__ = ["VsProfilesDataset", "create_dataloader"]
 
 class VsProfilesDataset(Dataset):
     """Loads Vs profiles from a Parquet file and pads to a fixed length.
-    
+
     This dataset handles normalization to [0,1] range for stable FFM training
     and stores normalization parameters for denormalization during sampling.
 
@@ -98,7 +98,10 @@ class VsProfilesDataset(Dataset):
 
         # Pad the normalized sequence
         padded = np.pad(
-            seq_normalized, (0, pad_len), mode="constant", constant_values=self.pad_value
+            seq_normalized,
+            (0, pad_len),
+            mode="constant",
+            constant_values=self.pad_value,
         )
 
         # Shape to (C=1, L)
@@ -135,7 +138,9 @@ def create_dataloader(
 if __name__ == "__main__":
     print("Testing VsProfilesDataset...")
 
-    loader, max_length, dataset = create_dataloader(batch_size=4, num_workers=0, shuffle=False)
+    loader, max_length, dataset = create_dataloader(
+        batch_size=4, num_workers=0, shuffle=False
+    )
     print(f"Loaded dataloader with max_length={max_length}")
     for i, x in enumerate(loader):
         print(f"Batch {i}: x.shape={x.shape}")
