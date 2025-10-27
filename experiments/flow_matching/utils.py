@@ -186,7 +186,7 @@ def log_vs30_metrics(
 
     # Denormalize samples before computing Vs30
     generated_samples_denorm = dataset.denormalize_batch(generated_samples)
-    
+
     # Convert to numpy
     generated_samples_np = generated_samples_denorm.cpu().numpy()
 
@@ -513,9 +513,9 @@ def sample_ffm(model, initial_noise, ode_steps, device):
 
 
 def sample_ffm_pcfm(
-    model, 
-    initial_noise, 
-    ode_steps, 
+    model,
+    initial_noise,
+    ode_steps,
     device,
     dataset,
     guidance_strength=1.0,
@@ -523,17 +523,17 @@ def sample_ffm_pcfm(
     positivity_weight=1.0,
     smoothness_weight=0.1,
     vs_range_min=50.0,
-    vs_range_max=2000.0
+    vs_range_max=2000.0,
 ):
     """
     Sample from FFM model using Physics-Constrained Flow Matching guidance.
-    
+
     This sampler applies physics constraints during the ODE integration process:
     1. Positivity: Vs values must be positive (Vs > 0)
     2. Monotonicity: Vs generally increases with depth (realistic soil behavior)
     3. Smoothness: Avoid sharp discontinuities in Vs profiles
     4. Range constraints: Vs values within realistic range (50-2000 m/s)
-    
+
     Args:
         model: Trained FFM model
         initial_noise: Initial noise tensor
@@ -546,7 +546,7 @@ def sample_ffm_pcfm(
         smoothness_weight: Weight for smoothness constraint
         vs_range_min: Minimum realistic Vs value (m/s)
         vs_range_max: Maximum realistic Vs value (m/s)
-    
+
     Returns:
         Generated samples with physics constraints applied
     """
@@ -558,7 +558,7 @@ def sample_ffm_pcfm(
         # Current time
         t_val = i * dt
         t = torch.full((u.shape[0], 1), t_val).to(device)
-        
+
         # Make `u` require gradients for the guidance step
         u = u.detach().requires_grad_(True)
 
@@ -574,30 +574,32 @@ def sample_ffm_pcfm(
         # Penalize values below minimum realistic Vs
         vs_min_tensor = torch.tensor(vs_range_min, device=device, requires_grad=True)
         loss_positivity = torch.mean(torch.relu(vs_min_tensor - u_phys))
-        
+
         # Constraint 2: Range constraint (encourage vs_range_min < u_phys < vs_range_max)
         # Penalize values above maximum realistic Vs
         vs_max_tensor = torch.tensor(vs_range_max, device=device, requires_grad=True)
         loss_range_max = torch.mean(torch.relu(u_phys - vs_max_tensor))
-        
+
         # Constraint 3: Monotonicity (encourage general increase with depth)
         # Calculate depth-wise differences
         diff = u_phys[..., 1:] - u_phys[..., :-1]
         # Penalize negative trends (decreasing Vs with depth)
         loss_monotonic = torch.mean(torch.relu(-diff))
-        
+
         # Constraint 4: Smoothness (avoid sharp discontinuities)
         # Penalize large second derivatives
         loss_smoothness = torch.tensor(0.0, device=device, requires_grad=True)
         if u_phys.shape[-1] > 2:
             second_diff = u_phys[..., 2:] - 2 * u_phys[..., 1:-1] + u_phys[..., :-2]
             loss_smoothness = torch.mean(torch.abs(second_diff))
-        
+
         # Total physics loss
-        loss_physics = (positivity_weight * loss_positivity + 
-                       positivity_weight * loss_range_max +
-                       monotonic_weight * loss_monotonic +
-                       smoothness_weight * loss_smoothness)
+        loss_physics = (
+            positivity_weight * loss_positivity
+            + positivity_weight * loss_range_max
+            + monotonic_weight * loss_monotonic
+            + smoothness_weight * loss_smoothness
+        )
 
         # 4. Apply physics guidance if loss is significant
         if loss_physics.item() > 1e-6:  # Use small threshold to avoid numerical issues
@@ -607,14 +609,16 @@ def sample_ffm_pcfm(
 
                 # Define the guidance vector (opposite direction to minimize loss)
                 v_guidance = -grad_u
-                
+
                 # Combine the model's vector field with the guidance vector
                 # Scale guidance to match the magnitude of the predicted vector field
                 v_pred_norm = v_pred.norm(dim=(1, 2), keepdim=True)
                 v_guidance_norm = v_guidance.norm(dim=(1, 2), keepdim=True)
-                
+
                 # Normalize guidance and re-scale by v_pred magnitude
-                v_guidance_scaled = (v_guidance / (v_guidance_norm + 1e-8)) * v_pred_norm
+                v_guidance_scaled = (
+                    v_guidance / (v_guidance_norm + 1e-8)
+                ) * v_pred_norm
 
                 v_corrected = v_pred + v_guidance_scaled * guidance_strength
             except RuntimeError:
@@ -637,7 +641,7 @@ def plot_comprehensive_comparison(
     output_dir: str,
     step: int,
     max_profiles: int = 20,
-    avg_samples_per_meter: float = 2.0
+    avg_samples_per_meter: float = 2.0,
 ) -> None:
     """
     Create comprehensive comparison plots.
@@ -653,7 +657,7 @@ def plot_comprehensive_comparison(
     import matplotlib.pyplot as plt
     from scipy import stats
     from sklearn.metrics import mean_squared_error
-    
+
     # Set up the plot
     plt.figure(figsize=(20, 12))
 
@@ -675,9 +679,7 @@ def plot_comprehensive_comparison(
 
     # Plot generated profiles
     for i in range(min(max_profiles, generated_profiles.shape[0])):
-        ax1.plot(
-            generated_profiles[i, 0, :], depths, "r-", alpha=0.3, linewidth=0.5
-        )
+        ax1.plot(generated_profiles[i, 0, :], depths, "r-", alpha=0.3, linewidth=0.5)
 
     ax1.set_title("Profile Comparison")
     ax1.set_xlabel("Vs (m/s)")
@@ -714,12 +716,8 @@ def plot_comprehensive_comparison(
     ax3 = plt.subplot(2, 3, 3)
     ks_vs30 = stats.ks_2samp(real_vs30, gen_vs30).statistic  # type: ignore
 
-    ax3.hist(
-        real_vs30, bins=30, alpha=0.7, label="Real", density=True, color="blue"
-    )
-    ax3.hist(
-        gen_vs30, bins=30, alpha=0.7, label="Generated", density=True, color="red"
-    )
+    ax3.hist(real_vs30, bins=30, alpha=0.7, label="Real", density=True, color="blue")
+    ax3.hist(gen_vs30, bins=30, alpha=0.7, label="Generated", density=True, color="red")
 
     ax3.set_title(f"Vs30 Distribution\nKS: {ks_vs30:.4f}")
     ax3.set_xlabel("Vs30 (m/s)")
@@ -731,9 +729,7 @@ def plot_comprehensive_comparison(
     ax4 = plt.subplot(2, 3, 4)
     ks_vs100 = stats.ks_2samp(real_vs100, gen_vs100).statistic  # type: ignore
 
-    ax4.hist(
-        real_vs100, bins=30, alpha=0.7, label="Real", density=True, color="blue"
-    )
+    ax4.hist(real_vs100, bins=30, alpha=0.7, label="Real", density=True, color="blue")
     ax4.hist(
         gen_vs100, bins=30, alpha=0.7, label="Generated", density=True, color="red"
     )
@@ -809,7 +805,7 @@ Gen Vs100: {np.mean(gen_vs100):.1f} ± {np.std(gen_vs100):.1f}
     )
 
     plt.tight_layout()
-    
+
     # Save the plot
     os.makedirs(output_dir, exist_ok=True)
     save_path = os.path.join(output_dir, f"comprehensive_comparison_step_{step}.png")

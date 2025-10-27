@@ -92,7 +92,7 @@ def train_ffm_step(model, optimizer, batch, config):
     target_v = torch.where(
         t_broadcast < 0.999,  # Avoid division by zero
         (u1 - ut) / torch.clamp(1 - t_broadcast, min=1e-6),
-        torch.zeros_like(u1)
+        torch.zeros_like(u1),
     )
 
     # --- Forward pass ---
@@ -164,12 +164,12 @@ def main() -> None:
     print(f"Starting training for {cfg.num_steps} steps...")
     print(f"Dataset size: {len(dataset)} profiles")
     print(f"Batches per epoch: {len(loader)}")
-    
+
     # Create a fresh dataloader iterator
     dataloader_iter = iter(loader)
-    
+
     pbar = tqdm(total=cfg.num_steps, desc="Training FFM")
-    
+
     while step < cfg.num_steps:
         try:
             # Get next batch, restart dataloader if needed
@@ -179,7 +179,7 @@ def main() -> None:
                 print(f"Restarting dataloader at step {step}")
                 dataloader_iter = iter(loader)
                 batch = next(dataloader_iter)
-            
+
             try:
                 total_loss, mse_loss, tvd_loss = train_ffm_step(
                     model, optimizer, batch, cfg
@@ -188,6 +188,7 @@ def main() -> None:
             except Exception as e:
                 print(f"Error in training step {step}: {e}")
                 import traceback
+
                 traceback.print_exc()
                 break
 
@@ -226,24 +227,24 @@ def main() -> None:
                 # Generate and save samples
                 with torch.no_grad():
                     model.eval()
-                    
+
                     # Choose sampler based on configuration
                     if cfg.use_pcfm:
                         samples = utils_mod.sample_ffm_pcfm(
-                            model, 
-                            z_fixed, 
-                            cfg.ode_steps, 
+                            model,
+                            z_fixed,
+                            cfg.ode_steps,
                             device,
                             dataset,
                             guidance_strength=cfg.pcfm_guidance_strength,
                             monotonic_weight=cfg.pcfm_monotonic_weight,
-                            positivity_weight=cfg.pcfm_positivity_weight
+                            positivity_weight=cfg.pcfm_positivity_weight,
                         )
                     else:
                         samples = utils_mod.sample_ffm(
                             model, z_fixed, cfg.ode_steps, device
                         )
-                    
+
                     model.train()
 
                     # Denormalize samples
@@ -289,13 +290,14 @@ def main() -> None:
 
             step += 1
             pbar.update(1)
-            
+
         except Exception as e:
             print(f"Error at step {step}: {e}")
             import traceback
+
             traceback.print_exc()
             break
-    
+
     pbar.close()
 
     # Save final checkpoint
@@ -313,22 +315,22 @@ def main() -> None:
     # Generate final samples
     with torch.no_grad():
         model.eval()
-        
+
         # Choose sampler based on configuration
         if cfg.use_pcfm:
             samples = utils_mod.sample_ffm_pcfm(
-                model, 
-                z_fixed, 
-                cfg.ode_steps, 
+                model,
+                z_fixed,
+                cfg.ode_steps,
                 device,
                 dataset,
                 guidance_strength=cfg.pcfm_guidance_strength,
                 monotonic_weight=cfg.pcfm_monotonic_weight,
-                positivity_weight=cfg.pcfm_positivity_weight
+                positivity_weight=cfg.pcfm_positivity_weight,
             )
         else:
             samples = utils_mod.sample_ffm(model, z_fixed, cfg.ode_steps, device)
-        
+
         samples_denorm = dataset.denormalize_batch(samples)
         np.save(
             os.path.join(cfg.out_dir, "samples_final.npy"), samples_denorm.cpu().numpy()
@@ -342,36 +344,42 @@ def main() -> None:
         print("Generating comprehensive comparison plot for final epoch...")
         try:
             # Load some real data for comparison (same number as generated samples)
-            loader_real, _, _ = create_dataloader(cfg.batch_size, cfg.num_workers, shuffle=False)
+            loader_real, _, _ = create_dataloader(
+                cfg.batch_size, cfg.num_workers, shuffle=False
+            )
             real_profiles = []
             for i, batch in enumerate(loader_real):
                 real_denorm = dataset.denormalize_batch(batch)
                 real_profiles.append(real_denorm.numpy())
-                if len(real_profiles) * cfg.batch_size >= cfg.num_samples:  # Match generated samples
+                if (
+                    len(real_profiles) * cfg.batch_size >= cfg.num_samples
+                ):  # Match generated samples
                     break
             real_profiles = np.concatenate(real_profiles, axis=0)
             # Ensure we have exactly the same number as generated samples
-            real_profiles = real_profiles[:cfg.num_samples]
-            
+            real_profiles = real_profiles[: cfg.num_samples]
+
             # Generate final samples for comparison
             with torch.no_grad():
                 model.eval()
                 if cfg.use_pcfm:
                     final_samples = utils_mod.sample_ffm_pcfm(
-                        model, 
-                        z_fixed, 
-                        cfg.ode_steps, 
+                        model,
+                        z_fixed,
+                        cfg.ode_steps,
                         device,
                         dataset,
                         guidance_strength=cfg.pcfm_guidance_strength,
                         monotonic_weight=cfg.pcfm_monotonic_weight,
-                        positivity_weight=cfg.pcfm_positivity_weight
+                        positivity_weight=cfg.pcfm_positivity_weight,
                     )
                 else:
-                    final_samples = utils_mod.sample_ffm(model, z_fixed, cfg.ode_steps, device)
+                    final_samples = utils_mod.sample_ffm(
+                        model, z_fixed, cfg.ode_steps, device
+                    )
                 final_samples_denorm = dataset.denormalize_batch(final_samples)
                 generated_profiles = final_samples_denorm.cpu().numpy()
-            
+
             # Create comprehensive comparison plot
             utils_mod.plot_comprehensive_comparison(
                 real_profiles,
@@ -379,23 +387,30 @@ def main() -> None:
                 cfg.out_dir,
                 step,
                 max_profiles=20,
-                avg_samples_per_meter=avg_samples_per_meter
+                avg_samples_per_meter=avg_samples_per_meter,
             )
-            
+
             # Log the plot to wandb
-            plot_path = os.path.join(cfg.out_dir, f"comprehensive_comparison_step_{step}.png")
+            plot_path = os.path.join(
+                cfg.out_dir, f"comprehensive_comparison_step_{step}.png"
+            )
             if os.path.exists(plot_path):
-                wandb.log({
-                    "step": step,
-                    "final_comprehensive_comparison": wandb.Image(plot_path)
-                })
+                wandb.log(
+                    {
+                        "step": step,
+                        "final_comprehensive_comparison": wandb.Image(plot_path),
+                    }
+                )
                 print(f"Comprehensive comparison plot logged to wandb: {plot_path}")
             else:
-                print(f"Warning: Comprehensive comparison plot not found at {plot_path}")
-                
+                print(
+                    f"Warning: Comprehensive comparison plot not found at {plot_path}"
+                )
+
         except Exception as e:
             print(f"Error generating comprehensive comparison plot: {e}")
             import traceback
+
             traceback.print_exc()
 
     # Finish wandb run

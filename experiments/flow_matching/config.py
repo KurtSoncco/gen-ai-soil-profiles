@@ -8,9 +8,15 @@ import torch
 @dataclass
 class Config:
     # Data
-    parquet_path: str = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "data", "vspdb_vs_profiles.parquet"))
+    parquet_path: str = os.path.abspath(
+        os.path.join(
+            os.path.dirname(__file__), "..", "..", "data", "vspdb_vs_profiles.parquet"
+        )
+    )
     feature_column: str = "vs_value"  # column name containing the profile values
-    group_column: str | None = "velocity_metadata_id"  # optional grouping id per profile; None assumes single-column array-like
+    group_column: str | None = (
+        "velocity_metadata_id"  # optional grouping id per profile; None assumes single-column array-like
+    )
     max_length: int | None = None  # if None, inferred from dataset
     pad_value: float = 0.0
     batch_size: int = 32  # Reduced from 32
@@ -29,14 +35,14 @@ class Config:
     num_steps: int = 5000  # number of training steps
     log_every: int = 100  # log every N steps
     checkpoint_every: int = 250  # save checkpoint every N steps
-    
+
     # Regularization
     tvd_weight: float = 0.01  # Total Variation Diminishing regularization weight
-    
+
     # FFM Sampling
     ode_steps: int = 100  # number of ODE integration steps for sampling
     num_samples: int = 16  # number of samples to generate during evaluation
-    
+
     # PCFM (Physics-Constrained Flow Matching) Configuration
     use_pcfm: bool = False  # whether to use PCFM sampler instead of regular FFM
     pcfm_guidance_strength: float = 1.0  # strength of physics guidance
@@ -44,14 +50,24 @@ class Config:
     pcfm_positivity_weight: float = 1.0  # weight for positivity constraint
 
     # IO
-    out_dir: str = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "outputs", "flow_matching"))
-    plots_dir: str = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "outputs", "flow_matching", "plots"))
-    results_dir: str = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "outputs", "flow_matching", "results"))
-    
+    out_dir: str = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "..", "..", "outputs", "flow_matching")
+    )
+    plots_dir: str = os.path.abspath(
+        os.path.join(
+            os.path.dirname(__file__), "..", "..", "outputs", "flow_matching", "plots"
+        )
+    )
+    results_dir: str = os.path.abspath(
+        os.path.join(
+            os.path.dirname(__file__), "..", "..", "outputs", "flow_matching", "results"
+        )
+    )
+
     # Wandb
     wandb_project: str = "ffm-soil-profiles"
     wandb_name: str | None = None  # if None, auto-generated
-    
+
     # Misc
     seed: int = 42
 

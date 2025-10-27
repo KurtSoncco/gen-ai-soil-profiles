@@ -102,17 +102,19 @@ def main() -> None:
     # Generate samples
     if cfg.use_pcfm:
         samples_normalized = utils_mod.sample_ffm_pcfm(
-            model, 
-            initial_noise, 
-            ode_steps, 
+            model,
+            initial_noise,
+            ode_steps,
             device,
             dataset,
             guidance_strength=cfg.pcfm_guidance_strength,
             monotonic_weight=cfg.pcfm_monotonic_weight,
-            positivity_weight=cfg.pcfm_positivity_weight
+            positivity_weight=cfg.pcfm_positivity_weight,
         )
     else:
-        samples_normalized = utils_mod.sample_ffm(model, initial_noise, ode_steps, device)
+        samples_normalized = utils_mod.sample_ffm(
+            model, initial_noise, ode_steps, device
+        )
 
     # Denormalize samples
     samples = dataset.denormalize_batch(samples_normalized)
