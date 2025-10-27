@@ -15,6 +15,10 @@ env/
 *.swp
 *.swo
 
+# Checkpoints
+*.pt
+*.pth
+
 # Jupyter Notebook
 .ipynb_checkpoints/
 
