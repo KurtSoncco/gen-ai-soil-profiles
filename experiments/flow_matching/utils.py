@@ -567,7 +567,7 @@ def sample_ffm_pcfm(
             v_pred = model(u, t)
 
         # 2. Denormalize u to physical values for physics constraint calculations
-        u_phys = dataset.denormalize_batch(u)
+        u_phys = dataset.denormalize_batch(u).to(device)
 
         # 3. Calculate physics constraint losses on physical values
         # Constraint 1: Positivity (encourage u_phys > vs_range_min)
