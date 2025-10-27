@@ -5,7 +5,6 @@ Tests each component step by step.
 """
 
 import numpy as np
-import pytest
 import torch
 from pathlib import Path
 import logging
