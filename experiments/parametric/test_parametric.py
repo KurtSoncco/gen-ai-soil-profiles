@@ -92,13 +92,13 @@ def test_generative_models():
 
     # Test GMM only (lightweight, no CUDA needed)
     print("  Testing GMM...")
-    gmm_generator = ParameterGenerator(model_type="gmm", n_components=4) # type: ignore
+    gmm_generator = ParameterGenerator(model_type="gmm", n_components=4)  # type: ignore
     gmm_generator.fit(parameters)
 
     generated_gmm = gmm_generator.generate(20)
     print(f"    Generated GMM parameters shape: {generated_gmm.shape}")
     assert generated_gmm.shape == (20, n_params)
-    
+
     print("Generative models test completed!")
 
 
@@ -133,7 +133,7 @@ def test_integration():
     fitted_params = fitter.fit_profiles(vs_profiles)
 
     # Train generative model
-    generator = ParameterGenerator(model_type="gmm", n_components=6) # type: ignore
+    generator = ParameterGenerator(model_type="gmm", n_components=6)  # type: ignore
     generator.fit(fitted_params)
 
     # Generate new parameters

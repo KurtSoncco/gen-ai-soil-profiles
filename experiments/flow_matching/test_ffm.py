@@ -20,12 +20,12 @@ def test_ffm_implementation():
         assert model is not None
         num_params = sum(p.numel() for p in model.parameters())
         assert num_params > 0
-        
+
         # Test model can be moved to device (but don't do heavy operations)
         if torch.cuda.is_available() and device.type == "cuda":
             model = model.to(device)
             # Just verify it's on the right device
             assert next(model.parameters()).is_cuda
-        
+
         del model
         torch.cuda.empty_cache() if torch.cuda.is_available() else None

@@ -22,16 +22,16 @@ def test_evaluation_metrics():
     # Shape needs to be (n_samples, n_channels, n_points)
     test_profile = np.array([[[200, 300, 400, 500, 600]]])
     samples_per_meter = 2.0
-    
+
     # Test compute_generated_vs30
     gen_vs30 = compute_generated_vs30(test_profile, samples_per_meter)
     assert isinstance(gen_vs30, np.ndarray)
     assert len(gen_vs30) == test_profile.shape[0]
-    
+
     # Test compute_vs100
     gen_vs100 = compute_vs100(test_profile, samples_per_meter)
     assert isinstance(gen_vs100, np.ndarray)
-    
+
     # Test ks_statistic
     real_data = np.random.randn(100)
     gen_data = np.random.randn(100)
