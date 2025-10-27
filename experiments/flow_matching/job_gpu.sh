@@ -12,7 +12,7 @@
 #SBATCH --cpus-per-task=8
 #
 # Number and type of GPUs
-#SBATCH --gres=gpu:a40:1
+#SBATCH --gres=gpu:A40:1
 
 #SBATCH --qos=a40_gpu3_normal
 
