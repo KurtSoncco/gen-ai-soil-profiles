@@ -1,7 +1,9 @@
+from typing import Dict, List, Optional
+
+import matplotlib.pyplot as plt
 import numpy as np
 from scipy import stats
-from typing import List, Dict, Optional
-import matplotlib.pyplot as plt
+
 from .utils import calculate_vs30
 
 
@@ -62,7 +64,7 @@ def compute_vs30_metrics(
     # Distribution statistics
     real_mean, real_std = np.mean(real_vs30_clean), np.std(real_vs30_clean)
     gen_mean, gen_std = np.mean(gen_vs30_clean), np.std(gen_vs30_clean)
-    
+
     assert isinstance(ks_stat, float)
     assert isinstance(ks_pvalue, float)
     assert isinstance(real_mean, float)
