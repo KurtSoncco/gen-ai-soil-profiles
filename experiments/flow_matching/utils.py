@@ -517,6 +517,7 @@ def sample_ffm_pcfm(
     initial_noise, 
     ode_steps, 
     device,
+    dataset,
     guidance_strength=1.0,
     monotonic_weight=1.0,
     positivity_weight=1.0,
@@ -538,6 +539,7 @@ def sample_ffm_pcfm(
         initial_noise: Initial noise tensor
         ode_steps: Number of ODE integration steps
         device: PyTorch device
+        dataset: Dataset object with denormalize_batch method
         guidance_strength: Strength of physics guidance (0.0 = no guidance, 1.0 = full guidance)
         monotonic_weight: Weight for monotonicity constraint
         positivity_weight: Weight for positivity constraint
@@ -564,28 +566,31 @@ def sample_ffm_pcfm(
         with torch.no_grad():
             v_pred = model(u, t)
 
-        # 2. Calculate physics constraint losses
-        # Constraint 1: Positivity (encourage u > vs_range_min)
+        # 2. Denormalize u to physical values for physics constraint calculations
+        u_phys = dataset.denormalize_batch(u)
+
+        # 3. Calculate physics constraint losses on physical values
+        # Constraint 1: Positivity (encourage u_phys > vs_range_min)
         # Penalize values below minimum realistic Vs
         vs_min_tensor = torch.tensor(vs_range_min, device=device, requires_grad=True)
-        loss_positivity = torch.mean(torch.relu(vs_min_tensor - u))
+        loss_positivity = torch.mean(torch.relu(vs_min_tensor - u_phys))
         
-        # Constraint 2: Range constraint (encourage vs_range_min < u < vs_range_max)
+        # Constraint 2: Range constraint (encourage vs_range_min < u_phys < vs_range_max)
         # Penalize values above maximum realistic Vs
         vs_max_tensor = torch.tensor(vs_range_max, device=device, requires_grad=True)
-        loss_range_max = torch.mean(torch.relu(u - vs_max_tensor))
+        loss_range_max = torch.mean(torch.relu(u_phys - vs_max_tensor))
         
         # Constraint 3: Monotonicity (encourage general increase with depth)
         # Calculate depth-wise differences
-        diff = u[..., 1:] - u[..., :-1]
+        diff = u_phys[..., 1:] - u_phys[..., :-1]
         # Penalize negative trends (decreasing Vs with depth)
         loss_monotonic = torch.mean(torch.relu(-diff))
         
         # Constraint 4: Smoothness (avoid sharp discontinuities)
         # Penalize large second derivatives
         loss_smoothness = torch.tensor(0.0, device=device, requires_grad=True)
-        if u.shape[-1] > 2:
-            second_diff = u[..., 2:] - 2 * u[..., 1:-1] + u[..., :-2]
+        if u_phys.shape[-1] > 2:
+            second_diff = u_phys[..., 2:] - 2 * u_phys[..., 1:-1] + u_phys[..., :-2]
             loss_smoothness = torch.mean(torch.abs(second_diff))
         
         # Total physics loss
@@ -594,7 +599,7 @@ def sample_ffm_pcfm(
                        monotonic_weight * loss_monotonic +
                        smoothness_weight * loss_smoothness)
 
-        # 3. Apply physics guidance if loss is significant
+        # 4. Apply physics guidance if loss is significant
         if loss_physics.item() > 1e-6:  # Use small threshold to avoid numerical issues
             try:
                 # Get the gradient of the physics loss w.r.t. the current sample `u`
@@ -619,7 +624,7 @@ def sample_ffm_pcfm(
             # No constraints violated, no guidance needed
             v_corrected = v_pred
 
-        # 6. Take the Euler step using the corrected vector field
+        # 5. Take the Euler step using the corrected vector field
         u = u.detach()  # Stop tracking gradients for the next step
         u = u + v_corrected * dt
 

@@ -106,6 +106,7 @@ def main() -> None:
             initial_noise, 
             ode_steps, 
             device,
+            dataset,
             guidance_strength=cfg.pcfm_guidance_strength,
             monotonic_weight=cfg.pcfm_monotonic_weight,
             positivity_weight=cfg.pcfm_positivity_weight

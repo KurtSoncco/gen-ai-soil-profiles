@@ -152,6 +152,7 @@ class FFMEvaluator:
                         initial_noise, 
                         self.config.ode_steps, 
                         self.device,
+                        self.dataset,
                         guidance_strength=self.config.pcfm_guidance_strength,
                         monotonic_weight=self.config.pcfm_monotonic_weight,
                         positivity_weight=self.config.pcfm_positivity_weight
