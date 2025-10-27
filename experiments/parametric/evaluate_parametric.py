@@ -20,10 +20,11 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error
 project_root = Path(__file__).parent.parent.parent
 sys.path.append(str(project_root))
 
-from experiments.parametric.src.generative_models import ParameterGenerator
-from experiments.parametric.src.parametric_models import ParametricProfileFitter
-from experiments.VAE.src.utils import calculate_vs30
-from soilgen_ai.logging_config import setup_logging
+# These imports must come after sys.path.append
+from experiments.parametric.src.generative_models import ParameterGenerator  # noqa: E402
+from experiments.parametric.src.parametric_models import ParametricProfileFitter  # noqa: E402
+from experiments.VAE.src.utils import calculate_vs30  # noqa: E402
+from soilgen_ai.logging_config import setup_logging  # noqa: E402
 
 
 class ParametricProfileEvaluator:
@@ -190,7 +191,7 @@ class ParametricProfileEvaluator:
         logging.info("Creating comprehensive comparison plots...")
 
         # Set up the plot
-        fig = plt.figure(figsize=(20, 16))
+        plt.figure(figsize=(20, 16))
 
         # 1. Profile comparison (top row)
         for i, model_name in enumerate(model_names):
@@ -372,7 +373,6 @@ def load_results(results_dir):
     results_dir = Path(results_dir)
 
     # Load generated profiles
-    generated_profiles = {}
     generated_parameters = {}
 
     for model_file in results_dir.glob("*.pkl"):
