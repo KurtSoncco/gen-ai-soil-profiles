@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=test 
-#SBATCH --account=fc_tfsurrogate 
+#SBATCH --account=fc_tfsurrogate
 #SBATCH --partition=savio3_gpu
 #SBATCH --nodes=1
 #
