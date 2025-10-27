@@ -8,13 +8,13 @@
 #SBATCH --ntasks=1
 #
 # Processors per task:
-# Four times the number of GPUs for A40 in savio3_gpu
-#SBATCH --cpus-per-task=4
+# Eight times the number for A40 in savio3_gpu
+#SBATCH --cpus-per-task=8
 #
-#Number of GPUs
-#SBATCH --gres=gpu:A40:1
+#Number and type of GPUs
+#SBATCH --gres=gpu:a40:1
 
-#SBATCH --qos=savio_normal
+#SBATCH --qos=a40_gpu3_normal
 
 # Wall clock limit:
 #SBATCH --time=00:00:30
