@@ -1,6 +1,6 @@
 import numpy as np
 from scipy import stats
-from typing import List, Dict
+from typing import List, Dict, Optional
 import matplotlib.pyplot as plt
 from .utils import calculate_vs30
 
@@ -57,21 +57,28 @@ def compute_vs30_metrics(
         }
 
     # Kolmogorov-Smirnov test
-    ks_stat, ks_pvalue = stats.ks_2samp(real_vs30_clean, gen_vs30_clean)
+    ks_stat, ks_pvalue = stats.ks_2samp(real_vs30_clean, gen_vs30_clean, method="asymp")
 
     # Distribution statistics
     real_mean, real_std = np.mean(real_vs30_clean), np.std(real_vs30_clean)
     gen_mean, gen_std = np.mean(gen_vs30_clean), np.std(gen_vs30_clean)
+    
+    assert isinstance(ks_stat, float)
+    assert isinstance(ks_pvalue, float)
+    assert isinstance(real_mean, float)
+    assert isinstance(real_std, float)
+    assert isinstance(gen_mean, float)
+    assert isinstance(gen_std, float)
 
     return {
-        "ks_statistic": ks_stat,
-        "ks_pvalue": ks_pvalue,
-        "mean_ratio": gen_mean / real_mean if real_mean > 0 else 1.0,
-        "std_ratio": gen_std / real_std if real_std > 0 else 1.0,
-        "real_mean": real_mean,
-        "real_std": real_std,
-        "gen_mean": gen_mean,
-        "gen_std": gen_std,
+        "ks_statistic": float(ks_stat),
+        "ks_pvalue": float(ks_pvalue),
+        "mean_ratio": float(gen_mean / real_mean if real_mean > 0 else 1.0),
+        "std_ratio": float(gen_std / real_std if real_std > 0 else 1.0),
+        "real_mean": float(real_mean),
+        "real_std": float(real_std),
+        "gen_mean": float(gen_mean),
+        "gen_std": float(gen_std),
     }
 
 
@@ -122,7 +129,7 @@ def plot_comprehensive_evaluation(
     generated_profiles: np.ndarray,
     depths: np.ndarray,
     vs30_metrics: Dict[str, float],
-    save_path: str = None,
+    save_path: Optional[str] = None,
 ):
     """Create comprehensive evaluation plots."""
 

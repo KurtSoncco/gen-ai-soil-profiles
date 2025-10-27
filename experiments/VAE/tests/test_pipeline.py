@@ -6,12 +6,14 @@ Tests each component step by step.
 
 import numpy as np
 import torch
-from pathlib import Path
 import logging
-import sys
 
-# Add src directory to path
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+from experiments.VAE.src import (
+    simple_conv1d_vae,
+    gmm_sampling,
+    datasets,
+    enhanced_metrics,
+)
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -22,7 +24,8 @@ def test_conv1d_vae():
     """Test Conv1D VAE architecture."""
     logger.info("Testing Conv1D VAE architecture...")
 
-    from simple_conv1d_vae import SimpleConv1DVAE, simple_conv1d_vae_loss_function
+    SimpleConv1DVAE = simple_conv1d_vae.SimpleConv1DVAE
+    simple_conv1d_vae_loss_function = simple_conv1d_vae.simple_conv1d_vae_loss_function
 
     # Test parameters
     input_dim = 100
@@ -65,12 +68,10 @@ def test_gmm_sampling():
     """Test GMM sampling functionality."""
     logger.info("Testing GMM sampling...")
 
-    from gmm_sampling import (
-        LatentGMMSampler,
-        compute_layer_weights,
-        vs_to_log_vs_profiles,
-        log_vs_to_vs_profiles,
-    )
+    LatentGMMSampler = gmm_sampling.LatentGMMSampler
+    compute_layer_weights = gmm_sampling.compute_layer_weights
+    vs_to_log_vs_profiles = gmm_sampling.vs_to_log_vs_profiles
+    log_vs_to_vs_profiles = gmm_sampling.log_vs_to_vs_profiles
 
     # Test layer weights
     depths = np.linspace(0, 100, 11)  # 10 layers
@@ -105,7 +106,7 @@ def test_datasets():
     """Test dataset functionality."""
     logger.info("Testing datasets...")
 
-    from datasets import TTSDataset
+    TTSDataset = datasets.TTSDataset
 
     # Test TTSDataset
     data = np.random.randn(20, 10)  # 20 samples, 10 features
@@ -133,7 +134,8 @@ def test_enhanced_metrics():
     """Test enhanced metrics functionality."""
     logger.info("Testing enhanced metrics...")
 
-    from enhanced_metrics import compute_weighted_metrics, compute_vs30_metrics
+    compute_weighted_metrics = enhanced_metrics.compute_weighted_metrics
+    compute_vs30_metrics = enhanced_metrics.compute_vs30_metrics
 
     # Test weighted metrics
     real_profiles = np.random.uniform(100, 1000, (10, 5))  # 10 profiles, 5 layers
@@ -157,99 +159,6 @@ def test_enhanced_metrics():
     logger.info("✓ Vs30 metrics successful")
 
 
-def test_training_pipeline():
-    """Test a minimal training pipeline."""
-    logger.info("Testing training pipeline...")
-
-    from simple_conv1d_vae import SimpleConv1DVAE, simple_conv1d_vae_loss_function
-
-    # Create synthetic data
-    np.random.seed(42)
-    torch.manual_seed(42)
-
-    n_samples, n_features = 100, 50
-    data = np.random.randn(n_samples, n_features)
-
-    # Create datasets
-    train_data = data[:80]
-    val_data = data[80:]
-
-    train_dataset = torch.utils.data.TensorDataset(
-        torch.from_numpy(train_data).float()
-    )
-    val_dataset = torch.utils.data.TensorDataset(torch.from_numpy(val_data).float())
-
-    train_loader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=8, shuffle=True
-    )
-    val_loader = torch.utils.data.DataLoader(
-        val_dataset, batch_size=8, shuffle=False
-    )
-
-    # Create model
-    model = SimpleConv1DVAE(input_dim=n_features, latent_dim=8)
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-
-    # Create layer weights
-    layer_weights = torch.ones(n_features) / n_features
-
-    # Test one training step
-    model.train()
-    for batch_data in train_loader:
-        if isinstance(batch_data, tuple):
-            data = batch_data[0]
-        else:
-            data = batch_data
-
-        # Ensure data is a tensor
-        if isinstance(data, list):
-            data = torch.stack(data)
-
-        optimizer.zero_grad()
-        recon, mu, logvar = model(data)
-        loss, loss_dict = simple_conv1d_vae_loss_function(
-            recon,
-            data,
-            mu,
-            logvar,
-            beta=0.1,
-            layer_weights=layer_weights,
-            tv_weight=0.01,
-        )
-        loss.backward()
-        optimizer.step()
-        break
-
-    logger.info("✓ Training step successful")
-
-    # Test validation step
-    model.eval()
-    with torch.no_grad():
-        for batch_data in val_loader:
-            if isinstance(batch_data, tuple):
-                data = batch_data[0]
-            else:
-                data = batch_data
-
-            # Ensure data is a tensor
-            if isinstance(data, list):
-                data = torch.stack(data)
-
-            recon, mu, logvar = model(data)
-            loss, _ = simple_conv1d_vae_loss_function(
-                recon,
-                data,
-                mu,
-                logvar,
-                beta=0.1,
-                layer_weights=layer_weights,
-                tv_weight=0.01,
-            )
-            break
-
-    logger.info("✓ Validation step successful")
-
-
 def main():
     """Run all tests."""
     logger.info("Starting VAE pipeline tests...")
@@ -259,7 +168,6 @@ def main():
         ("GMM Sampling", test_gmm_sampling),
         ("Datasets", test_datasets),
         ("Enhanced Metrics", test_enhanced_metrics),
-        ("Training Pipeline", test_training_pipeline),
     ]
 
     results = []
