@@ -24,83 +24,107 @@ from .utils import (
 from .vae_model import VAE, evaluate_model, vae_loss_function
 from .vq_vae_model import VQVAE  # vq_vae_loss_function
 from .vq_vae_model import evaluate_model as evaluate_vq_model
-from .conv1d_vae import Conv1DVAE, conv1d_vae_loss_function
-from .simple_conv1d_vae import SimpleConv1DVAE, simple_conv1d_vae_loss_function
-from .gmm_sampling import LatentGMMSampler, extract_latent_samples, generate_with_gmm, compute_layer_weights
+from .conv1d_vae import conv1d_vae_loss_function
+from .simple_conv1d_vae import simple_conv1d_vae_loss_function
+from .gmm_sampling import (
+    LatentGMMSampler,
+    extract_latent_samples,
+    generate_with_gmm,
+    compute_layer_weights,
+)
 from .gmm_sampling import vs_to_log_vs_profiles, log_vs_to_vs_profiles
-from .enhanced_metrics import compute_weighted_metrics, compute_vs30_metrics, plot_comprehensive_evaluation
+from .enhanced_metrics import (
+    compute_weighted_metrics,
+    compute_vs30_metrics,
+    plot_comprehensive_evaluation,
+)
 
 import wandb
 from soilgen_ai.logging_config import setup_logging
 
 
-def train_conv1d_vae(model, optimizer, scheduler, train_loader, test_loader, device, 
-                    epochs, layer_weights, beta_end, beta_warmup_epochs, tv_weight):
+def train_conv1d_vae(
+    model,
+    optimizer,
+    scheduler,
+    train_loader,
+    test_loader,
+    device,
+    epochs,
+    layer_weights,
+    beta_end,
+    beta_warmup_epochs,
+    tv_weight,
+):
     """Custom training loop for Conv1D VAE with enhanced loss."""
     from tqdm import tqdm
-    
+
     model.to(device)
     train_losses = []
     test_losses = []
-    
+
     def compute_beta(epoch):
         if epoch >= beta_warmup_epochs:
             return beta_end
         fraction = max(0.0, float(epoch) / max(1, beta_warmup_epochs))
         return beta_end * fraction
-    
+
     for epoch in range(epochs):
         beta = compute_beta(epoch)
         model.train()
         running_loss = 0.0
-        
-        pbar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{epochs} (β={beta:.3f})")
+
+        pbar = tqdm(train_loader, desc=f"Epoch {epoch + 1}/{epochs} (β={beta:.3f})")
         for batch_idx, batch_data in enumerate(pbar):
             # Handle both tuple (DAE) and single tensor (baseline) cases
             if isinstance(batch_data, tuple):
                 data, _ = batch_data
             else:
                 data = batch_data
-            
+
             # Ensure data is a tensor (handle list case)
             if isinstance(data, list):
                 data = torch.stack(data)
             elif not isinstance(data, torch.Tensor):
                 data = torch.tensor(data)
-                
+
             data = data.to(device)
             optimizer.zero_grad()
-            
+
             recon, mu, logvar = model(data)
             loss, loss_dict = conv1d_vae_loss_function(
                 recon, data, mu, logvar, beta, layer_weights.to(device), tv_weight
             )
-            
+
             loss.backward()
             optimizer.step()
-            
+
             running_loss += loss.item()
-            pbar.set_postfix({
-                'loss': loss.item(),
-                'recon': loss_dict['recon_loss'],
-                'kld': loss_dict['kld_loss'],
-                'tv': loss_dict['tv_loss']
-            })
-            
+            pbar.set_postfix(
+                {
+                    "loss": loss.item(),
+                    "recon": loss_dict["recon_loss"],
+                    "kld": loss_dict["kld_loss"],
+                    "tv": loss_dict["tv_loss"],
+                }
+            )
+
             # Log detailed losses to W&B
             if batch_idx % 10 == 0:
-                wandb.log({
-                    'train/batch_loss': loss.item(),
-                    'train/batch_recon': loss_dict['recon_loss'],
-                    'train/batch_kld': loss_dict['kld_loss'],
-                    'train/batch_tv': loss_dict['tv_loss'],
-                    'train/beta': beta,
-                    'epoch': epoch
-                })
-        
+                wandb.log(
+                    {
+                        "train/batch_loss": loss.item(),
+                        "train/batch_recon": loss_dict["recon_loss"],
+                        "train/batch_kld": loss_dict["kld_loss"],
+                        "train/batch_tv": loss_dict["tv_loss"],
+                        "train/beta": beta,
+                        "epoch": epoch,
+                    }
+                )
+
         train_loss = running_loss / len(train_loader)
         train_losses.append(train_loss)
-        
+
         # Validation
         model.eval()
         val_loss = 0.0
@@ -111,102 +135,121 @@ def train_conv1d_vae(model, optimizer, scheduler, train_loader, test_loader, dev
                     data, _ = batch_data
                 else:
                     data = batch_data
-                
+
                 # Ensure data is a tensor (handle list case)
                 if isinstance(data, list):
                     data = torch.stack(data)
                 elif not isinstance(data, torch.Tensor):
                     data = torch.tensor(data)
-                    
+
                 data = data.to(device)
                 recon, mu, logvar = model(data)
                 loss, _ = conv1d_vae_loss_function(
                     recon, data, mu, logvar, beta, layer_weights.to(device), tv_weight
                 )
                 val_loss += loss.item()
-        
+
         val_loss /= len(test_loader)
         test_losses.append(val_loss)
         scheduler.step(val_loss)
-        
-        logging.info(f"Epoch {epoch+1}: Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}, β: {beta:.3f}")
-        wandb.log({
-            'train/epoch_loss': train_loss,
-            'val/epoch_loss': val_loss,
-            'train/beta': beta,
-            'epoch': epoch + 1
-        })
-    
+
+        logging.info(
+            f"Epoch {epoch + 1}: Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}, β: {beta:.3f}"
+        )
+        wandb.log(
+            {
+                "train/epoch_loss": train_loss,
+                "val/epoch_loss": val_loss,
+                "train/beta": beta,
+                "epoch": epoch + 1,
+            }
+        )
+
     return train_losses, test_losses
 
 
-def train_simple_conv1d_vae(model, optimizer, scheduler, train_loader, test_loader, device, 
-                           epochs, layer_weights, beta_end, beta_warmup_epochs, tv_weight):
+def train_simple_conv1d_vae(
+    model,
+    optimizer,
+    scheduler,
+    train_loader,
+    test_loader,
+    device,
+    epochs,
+    layer_weights,
+    beta_end,
+    beta_warmup_epochs,
+    tv_weight,
+):
     """Custom training loop for Simple Conv1D VAE with enhanced loss."""
     from tqdm import tqdm
-    
+
     model.to(device)
     train_losses = []
     test_losses = []
-    
+
     def compute_beta(epoch):
         if epoch >= beta_warmup_epochs:
             return beta_end
         fraction = max(0.0, float(epoch) / max(1, beta_warmup_epochs))
         return beta_end * fraction
-    
+
     for epoch in range(epochs):
         beta = compute_beta(epoch)
         model.train()
         running_loss = 0.0
-        
-        pbar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{epochs} (β={beta:.3f})")
+
+        pbar = tqdm(train_loader, desc=f"Epoch {epoch + 1}/{epochs} (β={beta:.3f})")
         for batch_idx, batch_data in enumerate(pbar):
             # Handle both tuple (DAE) and single tensor (baseline) cases
             if isinstance(batch_data, tuple):
                 data = batch_data[0]
             else:
                 data = batch_data
-            
+
             # Ensure data is a tensor (handle list case)
             if isinstance(data, list):
                 data = torch.stack(data)
             elif not isinstance(data, torch.Tensor):
                 data = torch.tensor(data)
-                
+
             data = data.to(device)
             optimizer.zero_grad()
-            
+
             recon, mu, logvar = model(data)
             loss, loss_dict = simple_conv1d_vae_loss_function(
                 recon, data, mu, logvar, beta, layer_weights.to(device), tv_weight
             )
-            
+
             loss.backward()
             optimizer.step()
-            
+
             running_loss += loss.item()
-            pbar.set_postfix({
-                'loss': loss.item(),
-                'recon': loss_dict['recon_loss'],
-                'kld': loss_dict['kld_loss'],
-                'tv': loss_dict['tv_loss']
-            })
-            
+            pbar.set_postfix(
+                {
+                    "loss": loss.item(),
+                    "recon": loss_dict["recon_loss"],
+                    "kld": loss_dict["kld_loss"],
+                    "tv": loss_dict["tv_loss"],
+                }
+            )
+
             # Log detailed losses to W&B
             if batch_idx % 10 == 0:
-                wandb.log({
-                    'train/batch_loss': loss.item(),
-                    'train/batch_recon': loss_dict['recon_loss'],
-                    'train/batch_kld': loss_dict['kld_loss'],
-                    'train/batch_tv': loss_dict['tv_loss'],
-                    'train/beta': beta,
-                    'epoch': epoch
-                })
-        
+                wandb.log(
+                    {
+                        "train/batch_loss": loss.item(),
+                        "train/batch_recon": loss_dict["recon_loss"],
+                        "train/batch_kld": loss_dict["kld_loss"],
+                        "train/batch_tv": loss_dict["tv_loss"],
+                        "train/beta": beta,
+                        "epoch": epoch,
+                    }
+                )
+
         train_loss = running_loss / len(train_loader)
         train_losses.append(train_loss)
-        
+
         # Validation
         model.eval()
         val_loss = 0.0
@@ -217,33 +260,38 @@ def train_simple_conv1d_vae(model, optimizer, scheduler, train_loader, test_load
                     data = batch_data[0]
                 else:
                     data = batch_data
-                
+
                 # Ensure data is a tensor (handle list case)
                 if isinstance(data, list):
                     data = torch.stack(data)
                 elif not isinstance(data, torch.Tensor):
                     data = torch.tensor(data)
-                    
+
                 data = data.to(device)
                 recon, mu, logvar = model(data)
                 loss, _ = simple_conv1d_vae_loss_function(
                     recon, data, mu, logvar, beta, layer_weights.to(device), tv_weight
                 )
                 val_loss += loss.item()
-        
+
         val_loss /= len(test_loader)
         test_losses.append(val_loss)
         scheduler.step(val_loss)
-        
-        logging.info(f"Epoch {epoch+1}: Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}, β: {beta:.3f}")
-        wandb.log({
-            'train/epoch_loss': train_loss,
-            'val/epoch_loss': val_loss,
-            'train/beta': beta,
-            'epoch': epoch + 1
-        })
-    
+
+        logging.info(
+            f"Epoch {epoch + 1}: Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}, β: {beta:.3f}"
+        )
+        wandb.log(
+            {
+                "train/epoch_loss": train_loss,
+                "val/epoch_loss": val_loss,
+                "train/beta": beta,
+                "epoch": epoch + 1,
+            }
+        )
+
     return train_losses, test_losses
+
 
 # Load environment variables from .env file
 load_dotenv()
@@ -326,7 +374,7 @@ if USE_LOG_VS:
     # Convert TTS to Vs profiles
     dz = np.diff(standard_depths)
     vs_profiles = tts_to_Vs(tts_profiles_normalized, dz)
-    
+
     # Transform to log(Vs) domain
     log_vs_profiles = vs_to_log_vs_profiles(vs_profiles, standard_depths)
     training_data = log_vs_profiles
@@ -391,7 +439,7 @@ if True:
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logging.info(f"Using device: {device}")
-    
+
     # Model selection
     if MODEL == "VAE":
         # Use MLP VAE for now - more reliable with this data format
@@ -439,25 +487,25 @@ if True:
             project=os.getenv("W_B_PROJECT", "soilgen-vae"),
             name=run_name,
             config={
-            "learning_rate": LEARNING_RATE,
-            "epochs": EPOCHS,
-            "batch_size": BATCH_SIZE,
-            "latent_dim": LATENT_DIM,
-            "model_type": model_type,
-            "num_layers": NUM_LAYERS,
-            "max_depth": MAX_DEPTH,
-            "input_dim": INPUT_DIM,
-            "weight_decay": WEIGHT_DECAY,
-            "betas": BETAS,
-            "use_conv1d": USE_CONV1D,
-            "use_log_vs": USE_LOG_VS,
-            "use_gmm_sampling": USE_GMM_SAMPLING,
-            "use_weighted_loss": USE_WEIGHTED_LOSS,
-            "use_dae": USE_DAE,
-            "beta_end": BETA_END,
-            "beta_warmup_epochs": BETA_WARMUP_EPOCHS,
-            "tv_weight": TV_WEIGHT,
-                 "run_name": run_name,
+                "learning_rate": LEARNING_RATE,
+                "epochs": EPOCHS,
+                "batch_size": BATCH_SIZE,
+                "latent_dim": LATENT_DIM,
+                "model_type": model_type,
+                "num_layers": NUM_LAYERS,
+                "max_depth": MAX_DEPTH,
+                "input_dim": INPUT_DIM,
+                "weight_decay": WEIGHT_DECAY,
+                "betas": BETAS,
+                "use_conv1d": USE_CONV1D,
+                "use_log_vs": USE_LOG_VS,
+                "use_gmm_sampling": USE_GMM_SAMPLING,
+                "use_weighted_loss": USE_WEIGHTED_LOSS,
+                "use_dae": USE_DAE,
+                "beta_end": BETA_END,
+                "beta_warmup_epochs": BETA_WARMUP_EPOCHS,
+                "tv_weight": TV_WEIGHT,
+                "run_name": run_name,
             },
             reinit=False,
             settings=wandb.Settings(start_method="thread"),
@@ -505,7 +553,7 @@ if True:
         train_losses, test_losses = None, None
     else:
         logging.info("Starting baseline VAE training...")
-        
+
         # Use standard training for MLP VAE
         _, train_losses, test_losses = train(
             model,
@@ -530,7 +578,9 @@ if True:
         plt.yscale("log")
         plt.legend()
 
-    plt.savefig(Path(__file__).parent / "training_losses.png", dpi=300, bbox_inches="tight")
+    plt.savefig(
+        Path(__file__).parent / "training_losses.png", dpi=300, bbox_inches="tight"
+    )
     logging.info("Training progress plot saved as training_losses.png")
     plt.close()
 
@@ -545,32 +595,39 @@ if True:
 
     # Save final model and log as W&B artifact
     final_path = Path(__file__).parent / "vae_model.pth"
-    torch.save({
-        "model_state_dict": model.state_dict(),
-        "config": dict(wandb.config),
-        "reconstruction_loss": reconstruction_loss,
-    }, final_path)
+    torch.save(
+        {
+            "model_state_dict": model.state_dict(),
+            "config": dict(wandb.config),
+            "reconstruction_loss": reconstruction_loss,
+        },
+        final_path,
+    )
     artifact = wandb.Artifact("vae_model", type="model")
     artifact.add_file(str(final_path))
     wandb.log_artifact(artifact)
 
     # --- Generation and visualization ---
     model.eval()
-    
+
     # Extract latent samples for GMM fitting if enabled
     gmm_sampler = None
     if USE_GMM_SAMPLING and MODEL == "VAE":
         logging.info("Fitting GMM to latent space...")
-        latent_samples = extract_latent_samples(model, train_loader, device, max_samples=5000)
+        latent_samples = extract_latent_samples(
+            model, train_loader, device, max_samples=5000
+        )
         gmm_sampler = LatentGMMSampler(n_components=8)
         gmm_sampler.fit(latent_samples)
         logging.info(f"GMM fitted with {gmm_sampler.n_components} components")
-    
+
     with torch.no_grad():
         if MODEL == "VAE":
             if USE_GMM_SAMPLING and gmm_sampler is not None:
                 # Use GMM sampling
-                generated_data = generate_with_gmm(model, gmm_sampler, NUM_NEW_PROFILES, device, INPUT_DIM)
+                generated_data = generate_with_gmm(
+                    model, gmm_sampler, NUM_NEW_PROFILES, device, INPUT_DIM
+                )
             else:
                 # Standard VAE sampling
                 z = torch.randn(NUM_NEW_PROFILES, LATENT_DIM).to(device)
@@ -580,7 +637,9 @@ if True:
                     generated_data = model.decoder(z).cpu().numpy()
         else:  # For VQ-VAE
             num_embeddings = model.vq_layer._num_embeddings
-            codebook_indices = torch.randint(0, num_embeddings, (NUM_NEW_PROFILES,)).to(device)
+            codebook_indices = torch.randint(0, num_embeddings, (NUM_NEW_PROFILES,)).to(
+                device
+            )
             z_quantized = model.vq_layer._embedding(codebook_indices)
             generated_data = model.decoder(z_quantized).cpu().numpy()
 
@@ -608,40 +667,50 @@ if True:
 
     # --- Enhanced Evaluation ---
     logging.info("Computing enhanced metrics...")
-    
+
     # Compute weighted metrics
     if USE_WEIGHTED_LOSS:
         weighted_metrics = compute_weighted_metrics(
-            real_vs_profiles, generated_vs_profiles, standard_depths, layer_weights.numpy()
+            real_vs_profiles,
+            generated_vs_profiles,
+            standard_depths,
+            layer_weights.numpy(),
         )
         logging.info(f"Weighted MSE: {weighted_metrics['weighted_mse']:.4f}")
         logging.info(f"Weighted MAE: {weighted_metrics['weighted_mae']:.4f}")
         logging.info(f"TV Ratio: {weighted_metrics['tv_ratio']:.4f}")
-        
+
         # Log to W&B
-        wandb.log({
-            "eval/weighted_mse": weighted_metrics['weighted_mse'],
-            "eval/weighted_mae": weighted_metrics['weighted_mae'],
-            "eval/tv_ratio": weighted_metrics['tv_ratio'],
-        })
-    
+        wandb.log(
+            {
+                "eval/weighted_mse": weighted_metrics["weighted_mse"],
+                "eval/weighted_mae": weighted_metrics["weighted_mae"],
+                "eval/tv_ratio": weighted_metrics["tv_ratio"],
+            }
+        )
+
     # Compute Vs30 metrics
     vs30_metrics = compute_vs30_metrics(real_vs30_test, generated_vs30)
     logging.info(f"Vs30 KS statistic: {vs30_metrics['ks_statistic']:.4f}")
     logging.info(f"Vs30 mean ratio: {vs30_metrics['mean_ratio']:.4f}")
     logging.info(f"Vs30 std ratio: {vs30_metrics['std_ratio']:.4f}")
-    
+
     # Log to W&B
-    wandb.log({
-        "eval/vs30_ks_statistic": vs30_metrics['ks_statistic'],
-        "eval/vs30_mean_ratio": vs30_metrics['mean_ratio'],
-        "eval/vs30_std_ratio": vs30_metrics['std_ratio'],
-    })
-    
+    wandb.log(
+        {
+            "eval/vs30_ks_statistic": vs30_metrics["ks_statistic"],
+            "eval/vs30_mean_ratio": vs30_metrics["mean_ratio"],
+            "eval/vs30_std_ratio": vs30_metrics["std_ratio"],
+        }
+    )
+
     # Create comprehensive evaluation plots
     plot_comprehensive_evaluation(
-        real_vs_profiles, generated_vs_profiles, standard_depths, vs30_metrics,
-        save_path=str(Path(__file__).parent / "comprehensive_evaluation.png")
+        real_vs_profiles,
+        generated_vs_profiles,
+        standard_depths,
+        vs30_metrics,
+        save_path=str(Path(__file__).parent / "comprehensive_evaluation.png"),
     )
 
     logging.info("Plotting generated Vs profiles...")
@@ -652,13 +721,15 @@ if True:
         MAX_DEPTH,
         VS_MAX,
     )
-    plt.savefig(Path(__file__).parent / "generated_profiles.png", dpi=300, bbox_inches="tight")
+    plt.savefig(
+        Path(__file__).parent / "generated_profiles.png", dpi=300, bbox_inches="tight"
+    )
     logging.info("Generated profiles plot saved as generated_profiles.png")
     plt.close()
 
     # --- Quantitative Evaluation ---
     logging.info("Evaluating generated profiles...")
-    
+
     evaluate_generation(real_vs_profiles, generated_vs_profiles, standard_depths)
     wandb.finish()
     logging.info("VAE script finished.")

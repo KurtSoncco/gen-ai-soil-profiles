@@ -32,5 +32,3 @@ class TTSDataset(torch.utils.data.Dataset):
         noise = torch.randn_like(clean) * self.corruption_noise_std
         noisy = clean + noise
         return noisy, clean
-
-

@@ -83,19 +83,24 @@ def train_dae(
         val_loss = val_running / len(val_loader.dataset)
 
         logging.info(f"DAE Epoch {epoch} train={train_loss:.4f} val={val_loss:.4f}")
-        wandb.log({"dae/train_loss": train_loss, "dae/val_loss": val_loss, "epoch": epoch})
+        wandb.log(
+            {"dae/train_loss": train_loss, "dae/val_loss": val_loss, "epoch": epoch}
+        )
 
         if val_loss + 1e-7 < best_val:
             best_val = val_loss
             bad_epochs = 0
             if checkpoint_path:
-                torch.save({
-                    "stage": "dae",
-                    "epoch": epoch,
-                    "model_state_dict": model.state_dict(),
-                    "optimizer_state_dict": optimizer.state_dict(),
-                    "val_loss": val_loss,
-                }, checkpoint_path)
+                torch.save(
+                    {
+                        "stage": "dae",
+                        "epoch": epoch,
+                        "model_state_dict": model.state_dict(),
+                        "optimizer_state_dict": optimizer.state_dict(),
+                        "val_loss": val_loss,
+                    },
+                    checkpoint_path,
+                )
                 wandb.save(checkpoint_path, base_path=str(Path(checkpoint_path).parent))
         else:
             bad_epochs += 1
@@ -124,7 +129,10 @@ def train_vae(
         beta = compute_beta(epoch, cfg)
         model.train()
         running = 0.0
-        pbar = tqdm(train_loader, desc=f"VAE finetune {epoch}/{cfg.epochs_vae} (beta={beta:.3f})")
+        pbar = tqdm(
+            train_loader,
+            desc=f"VAE finetune {epoch}/{cfg.epochs_vae} (beta={beta:.3f})",
+        )
         for x, _ in pbar:  # dataset returns (input, target), but for VAE we use x
             x = x.to(device)
             optimizer.zero_grad(set_to_none=True)
@@ -175,18 +183,19 @@ def train_vae(
             best_val = val_loss
             bad_epochs = 0
             if checkpoint_path:
-                torch.save({
-                    "stage": "vae",
-                    "epoch": epoch,
-                    "model_state_dict": model.state_dict(),
-                    "optimizer_state_dict": optimizer.state_dict(),
-                    "val_loss": val_loss,
-                }, checkpoint_path)
+                torch.save(
+                    {
+                        "stage": "vae",
+                        "epoch": epoch,
+                        "model_state_dict": model.state_dict(),
+                        "optimizer_state_dict": optimizer.state_dict(),
+                        "val_loss": val_loss,
+                    },
+                    checkpoint_path,
+                )
                 wandb.save(checkpoint_path, base_path=str(Path(checkpoint_path).parent))
         else:
             bad_epochs += 1
             if bad_epochs >= cfg.early_stop_patience:
                 logging.info("Early stopping VAE fine-tuning")
                 break
-
-

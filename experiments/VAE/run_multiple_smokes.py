@@ -11,7 +11,7 @@ from pathlib import Path
 
 
 def run_once(idx: int) -> int:
-    print(f"\n=== Run {idx+1} ===")
+    print(f"\n=== Run {idx + 1} ===")
     vae_dir = Path(__file__).parent
     # Run full experiment
     proc = subprocess.run([sys.executable, "run_experiment.py"], cwd=vae_dir)
@@ -34,5 +34,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-
-
