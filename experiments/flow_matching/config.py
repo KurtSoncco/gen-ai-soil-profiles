@@ -56,7 +56,7 @@ class Config:
     # LR Scheduler
     use_scheduler: bool = True  # whether to use LR scheduler
     scheduler_patience: int = (
-        1000  # ReduceLROnPlateau patience (recommended: 1000-1500 for 15k steps)
+        500  # ReduceLROnPlateau patience (recommended: 1000-1500 for 15k steps)
     )
     scheduler_factor: float = 0.5  # ReduceLROnPlateau factor
     scheduler_min_lr: float = 1e-6  # minimum learning rate
@@ -70,7 +70,7 @@ class Config:
 
     # FFM Sampling
     ode_steps: int = (
-        250  # number of ODE integration steps for sampling (increased for RK45)
+        100  # number of ODE integration steps for sampling (increased for RK45)
     )
     num_samples: int = 16  # number of samples to generate during evaluation
 
