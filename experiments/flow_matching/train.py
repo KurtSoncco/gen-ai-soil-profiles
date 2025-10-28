@@ -150,7 +150,7 @@ def main() -> None:
     # Create model
     model = models_mod.create_model(cfg.model_type, cfg).to(device)
     optimizer = optim.Adam(model.parameters(), lr=cfg.learning_rate)
-    
+
     # Create LR scheduler
     scheduler = None
     if cfg.use_scheduler:
@@ -216,11 +216,13 @@ def main() -> None:
                 # Update scheduler periodically (every 100 steps) or at checkpoints
                 if step % cfg.checkpoint_every == 0 and step > 0:
                     # Use the average of recent losses for scheduler
-                    recent_loss = sum(eval_loss_history[-cfg.checkpoint_every:]) / len(
-                        eval_loss_history[-cfg.checkpoint_every:]
+                    recent_loss = sum(eval_loss_history[-cfg.checkpoint_every :]) / len(
+                        eval_loss_history[-cfg.checkpoint_every :]
                     )
                     scheduler.step(recent_loss)
-                    print(f"LR scheduler updated. New LR: {optimizer.param_groups[0]['lr']:.2e}")
+                    print(
+                        f"LR scheduler updated. New LR: {optimizer.param_groups[0]['lr']:.2e}"
+                    )
 
             # Log to wandb
             if wandb is not None:

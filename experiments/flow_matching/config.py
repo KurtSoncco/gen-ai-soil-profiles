@@ -36,10 +36,12 @@ class Config:
     num_steps: int = 15000  # number of training steps
     log_every: int = 100  # log every N steps
     checkpoint_every: int = 250  # save checkpoint every N steps
-    
+
     # LR Scheduler
     use_scheduler: bool = True  # whether to use LR scheduler
-    scheduler_patience: int = 1000  # ReduceLROnPlateau patience (recommended: 1000-1500 for 15k steps)
+    scheduler_patience: int = (
+        1000  # ReduceLROnPlateau patience (recommended: 1000-1500 for 15k steps)
+    )
     scheduler_factor: float = 0.5  # ReduceLROnPlateau factor
     scheduler_min_lr: float = 1e-6  # minimum learning rate
     scheduler_mode: str = "min"  # "min" or "max"
