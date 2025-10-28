@@ -501,7 +501,7 @@ def plot_generation_trajectory(
 
 def sample_ffm(model, initial_noise, ode_steps, device):
     """
-    Sample from trained flow matching model using Euler ODE integration.
+    Sample from trained flow matching model using RK4 (Runge-Kutta 4) ODE integration.
 
     Args:
         model: Trained flow matching model (UNet or FNO)
@@ -523,11 +523,22 @@ def sample_ffm(model, initial_noise, ode_steps, device):
         t_val = i * dt
         t = torch.full((u.shape[0], 1), t_val).to(device)
 
-        # Predict vector field
-        v_pred = model(u, t)
+        # Predict vector field at current state
+        k1 = model(u, t) * dt
 
-        # Euler integration step: u_{t+dt} = u_t + v_pred * dt
-        u = u + v_pred * dt
+        # Second stage: midpoint
+        k2_t = t_val + 0.5 * dt
+        k2 = model(u + 0.5 * k1, torch.full((u.shape[0], 1), k2_t).to(device)) * dt
+
+        # Third stage: midpoint
+        k3 = model(u + 0.5 * k2, torch.full((u.shape[0], 1), k2_t).to(device)) * dt
+
+        # Fourth stage: endpoint
+        k4_t = t_val + dt
+        k4 = model(u + k3, torch.full((u.shape[0], 1), k4_t).to(device)) * dt
+
+        # Combine: RK4 integration
+        u = u + (k1 + 2 * k2 + 2 * k3 + k4) / 6.0
 
     return u
 

@@ -111,14 +111,22 @@ def train_ffm_step(model, optimizer, batch, config):
 
     # Add TVD regularization to encourage smoothness
     tvd_loss = compute_tvd_loss(predicted_v)
-    total_loss = mse_loss + config.tvd_weight * tvd_loss
+
+    # Add kinetic energy regularization to penalize large velocity magnitudes
+    kinetic_energy = torch.mean(predicted_v**2)
+
+    total_loss = (
+        mse_loss
+        + config.tvd_weight * tvd_loss
+        + config.kinetic_energy_weight * kinetic_energy
+    )
 
     # --- Backward pass ---
     optimizer.zero_grad()
     total_loss.backward()
     optimizer.step()
 
-    return total_loss.item(), mse_loss.item(), tvd_loss.item()
+    return total_loss.item(), mse_loss.item(), tvd_loss.item(), kinetic_energy.item()
 
 
 def main() -> None:
@@ -211,7 +219,7 @@ def main() -> None:
                 batch = next(dataloader_iter)
 
             try:
-                total_loss, mse_loss, tvd_loss = train_ffm_step(
+                total_loss, mse_loss, tvd_loss, kinetic_energy = train_ffm_step(
                     model, optimizer, batch, cfg
                 )
                 loss_history.append(total_loss)
@@ -244,13 +252,14 @@ def main() -> None:
                         "train/total_loss": total_loss,
                         "train/mse_loss": mse_loss,
                         "train/tvd_loss": tvd_loss,
+                        "train/kinetic_energy": kinetic_energy,
                         "train/lr": optimizer.param_groups[0]["lr"],
                     }
                 )
 
             if step % cfg.log_every == 0:
                 print(
-                    f"step={step} total_loss={total_loss:.6f} mse_loss={mse_loss:.6f} tvd_loss={tvd_loss:.6f}"
+                    f"step={step} total_loss={total_loss:.6f} mse_loss={mse_loss:.6f} tvd_loss={tvd_loss:.6f} kinetic_energy={kinetic_energy:.6f}"
                 )
 
             if step % cfg.checkpoint_every == 0 and step > 0:

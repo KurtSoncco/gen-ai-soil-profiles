@@ -49,8 +49,8 @@ class Config:
     learning_rate: float = 1e-4
     betas: tuple[float, float] = (0.6, 0.8)
     weight_decay: float = 1e-4
-    num_steps: int = 15000  # number of training steps
-    log_every: int = 500  # log every N steps
+    num_steps: int = 5000  # number of training steps
+    log_every: int = 250  # log every N steps
     checkpoint_every: int = 500  # save checkpoint every N steps
 
     # LR Scheduler
@@ -64,9 +64,14 @@ class Config:
 
     # Regularization
     tvd_weight: float = 0.00  # Total Variation Diminishing regularization weight
+    kinetic_energy_weight: float = (
+        0.1  # Kinetic energy regularization weight (penalizes ||v||²)
+    )
 
     # FFM Sampling
-    ode_steps: int = 100  # number of ODE integration steps for sampling
+    ode_steps: int = (
+        250  # number of ODE integration steps for sampling (increased for RK45)
+    )
     num_samples: int = 16  # number of samples to generate during evaluation
 
     # IO
