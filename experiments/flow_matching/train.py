@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import os
 import random
 from dataclasses import asdict
@@ -456,4 +457,50 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Train Flow Matching Model")
+    parser.add_argument(
+        "--num_steps", type=int, default=None, help="Number of training steps"
+    )
+    parser.add_argument(
+        "--use_pcfm", type=str, default=None, help="Use PCFM sampler (true/false)"
+    )
+    parser.add_argument(
+        "--pcfm_guidance_strength",
+        type=float,
+        default=None,
+        help="PCFM guidance strength",
+    )
+    parser.add_argument(
+        "--pcfm_monotonic_weight",
+        type=float,
+        default=None,
+        help="PCFM monotonic weight",
+    )
+    parser.add_argument(
+        "--pcfm_positivity_weight",
+        type=float,
+        default=None,
+        help="PCFM positivity weight",
+    )
+    parser.add_argument("--tvd_weight", type=float, default=None, help="TVD weight")
+    parser.add_argument("--wandb_name", type=str, default=None, help="Wandb run name")
+
+    args = parser.parse_args()
+
+    # Override config with command line arguments
+    if args.num_steps is not None:
+        cfg_mod.cfg.num_steps = args.num_steps
+    if args.use_pcfm is not None:
+        cfg_mod.cfg.use_pcfm = args.use_pcfm.lower() == "true"
+    if args.pcfm_guidance_strength is not None:
+        cfg_mod.cfg.pcfm_guidance_strength = args.pcfm_guidance_strength
+    if args.pcfm_monotonic_weight is not None:
+        cfg_mod.cfg.pcfm_monotonic_weight = args.pcfm_monotonic_weight
+    if args.pcfm_positivity_weight is not None:
+        cfg_mod.cfg.pcfm_positivity_weight = args.pcfm_positivity_weight
+    if args.tvd_weight is not None:
+        cfg_mod.cfg.tvd_weight = args.tvd_weight
+    if args.wandb_name is not None:
+        cfg_mod.cfg.wandb_name = args.wandb_name
+
     main()
