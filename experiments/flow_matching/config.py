@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+
 import torch
 
 
@@ -24,17 +25,24 @@ class Config:
 
     # Model Architecture
     model_type: str = "fno"  # "unet" or "fno"
-    unet_dim: int = 32  # base dimension for UNet (reduced from 64)
-    fno_modes: int = 8  # number of Fourier modes for FNO (reduced from 16)
-    fno_width: int = 32  # width of FNO layers (reduced from 64)
-    time_emb_dim: int = 64  # dimension of time embedding (reduced from 128)
+    unet_dim: int = 64  # base dimension for UNet (reduced from 64)
+    fno_modes: int = 16  # number of Fourier modes for FNO (reduced from 16)
+    fno_width: int = 64  # width of FNO layers (reduced from 64)
+    time_emb_dim: int = 128  # dimension of time embedding (reduced from 128)
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
 
     # FFM Training
-    learning_rate: float = 5e-4
-    num_steps: int = 5000  # number of training steps
+    learning_rate: float = 1e-4
+    num_steps: int = 15000  # number of training steps
     log_every: int = 100  # log every N steps
     checkpoint_every: int = 250  # save checkpoint every N steps
+    
+    # LR Scheduler
+    use_scheduler: bool = True  # whether to use LR scheduler
+    scheduler_patience: int = 1000  # ReduceLROnPlateau patience (recommended: 1000-1500 for 15k steps)
+    scheduler_factor: float = 0.5  # ReduceLROnPlateau factor
+    scheduler_min_lr: float = 1e-6  # minimum learning rate
+    scheduler_mode: str = "min"  # "min" or "max"
 
     # Regularization
     tvd_weight: float = 0.01  # Total Variation Diminishing regularization weight

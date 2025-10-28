@@ -8,6 +8,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 from tqdm import tqdm
 
 try:
@@ -149,14 +150,31 @@ def main() -> None:
     # Create model
     model = models_mod.create_model(cfg.model_type, cfg).to(device)
     optimizer = optim.Adam(model.parameters(), lr=cfg.learning_rate)
+    
+    # Create LR scheduler
+    scheduler = None
+    if cfg.use_scheduler:
+        scheduler = ReduceLROnPlateau(
+            optimizer,
+            mode=cfg.scheduler_mode,  # type: ignore
+            factor=cfg.scheduler_factor,
+            patience=cfg.scheduler_patience,
+            min_lr=cfg.scheduler_min_lr,
+        )
+        print(
+            f"Using ReduceLROnPlateau scheduler with patience={cfg.scheduler_patience}, "
+            f"factor={cfg.scheduler_factor}, min_lr={cfg.scheduler_min_lr}"
+        )
 
     print(
         f"Created {cfg.model_type.upper()} model with {sum(p.numel() for p in model.parameters()):,} parameters"
     )
     print(f"Training on {len(dataset)} profiles with max_length={max_length}")
+    print(f"Initial learning rate: {cfg.learning_rate}")
 
     step = 0
     loss_history = []
+    eval_loss_history = []  # For scheduler
 
     # Fixed samples for evaluation
     z_fixed = torch.randn(cfg.num_samples, 1, max_length).to(device)
@@ -192,6 +210,18 @@ def main() -> None:
                 traceback.print_exc()
                 break
 
+            # Update LR scheduler
+            if scheduler is not None:
+                eval_loss_history.append(total_loss)
+                # Update scheduler periodically (every 100 steps) or at checkpoints
+                if step % cfg.checkpoint_every == 0 and step > 0:
+                    # Use the average of recent losses for scheduler
+                    recent_loss = sum(eval_loss_history[-cfg.checkpoint_every:]) / len(
+                        eval_loss_history[-cfg.checkpoint_every:]
+                    )
+                    scheduler.step(recent_loss)
+                    print(f"LR scheduler updated. New LR: {optimizer.param_groups[0]['lr']:.2e}")
+
             # Log to wandb
             if wandb is not None:
                 wandb.log(
@@ -220,6 +250,8 @@ def main() -> None:
                     "dataset_min": dataset.min_val,
                     "dataset_max": dataset.max_val,
                 }
+                if scheduler is not None:
+                    checkpoint["scheduler"] = scheduler.state_dict()
                 torch.save(
                     checkpoint, os.path.join(cfg.out_dir, f"checkpoint_{step}.pt")
                 )
@@ -310,6 +342,8 @@ def main() -> None:
         "dataset_min": dataset.min_val,
         "dataset_max": dataset.max_val,
     }
+    if scheduler is not None:
+        checkpoint["scheduler"] = scheduler.state_dict()
     torch.save(checkpoint, os.path.join(cfg.out_dir, "checkpoint_final.pt"))
 
     # Generate final samples
