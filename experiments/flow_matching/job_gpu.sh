@@ -33,3 +33,4 @@ cd experiments/flow_matching
 
 ## Command to run training:
 python train.py
+python evaluate_ffm.py
