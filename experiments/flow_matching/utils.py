@@ -1,3 +1,12 @@
+"""Utility functions for Flow Matching.
+
+This module provides:
+- Sampling functions for generating profiles
+- Metrics computation (Vs30, Vs100)
+- Plotting and visualization utilities
+- Statistical analysis functions
+"""
+
 from __future__ import annotations
 
 import os
@@ -491,10 +500,21 @@ def plot_generation_trajectory(
 
 
 def sample_ffm(model, initial_noise, ode_steps, device):
-    """Helper function to sample from FFM model."""
+    """
+    Sample from trained flow matching model using Euler ODE integration.
+
+    Args:
+        model: Trained flow matching model (UNet or FNO)
+        initial_noise: Initial noise tensor (batch_size, 1, length)
+        ode_steps: Number of ODE integration steps
+        device: PyTorch device
+
+    Returns:
+        Generated samples with same shape as initial_noise
+    """
     model.eval()
 
-    # Start with noise
+    # Start with noise at t=0
     u = initial_noise.to(device)
     dt = 1.0 / ode_steps
 
@@ -506,133 +526,10 @@ def sample_ffm(model, initial_noise, ode_steps, device):
         # Predict vector field
         v_pred = model(u, t)
 
-        # Euler step: u_{t+dt} = u_t + v_pred * dt
+        # Euler integration step: u_{t+dt} = u_t + v_pred * dt
         u = u + v_pred * dt
 
     return u
-
-
-def sample_ffm_pcfm(
-    model,
-    initial_noise,
-    ode_steps,
-    device,
-    dataset,
-    guidance_strength=1.0,
-    monotonic_weight=1.0,
-    positivity_weight=1.0,
-    smoothness_weight=0.1,
-    vs_range_min=50.0,
-    vs_range_max=2000.0,
-):
-    """
-    Sample from FFM model using Physics-Constrained Flow Matching guidance.
-
-    This sampler applies physics constraints during the ODE integration process:
-    1. Positivity: Vs values must be positive (Vs > 0)
-    2. Monotonicity: Vs generally increases with depth (realistic soil behavior)
-    3. Smoothness: Avoid sharp discontinuities in Vs profiles
-    4. Range constraints: Vs values within realistic range (50-2000 m/s)
-
-    Args:
-        model: Trained FFM model
-        initial_noise: Initial noise tensor
-        ode_steps: Number of ODE integration steps
-        device: PyTorch device
-        dataset: Dataset object with denormalize_batch method
-        guidance_strength: Strength of physics guidance (0.0 = no guidance, 1.0 = full guidance)
-        monotonic_weight: Weight for monotonicity constraint
-        positivity_weight: Weight for positivity constraint
-        smoothness_weight: Weight for smoothness constraint
-        vs_range_min: Minimum realistic Vs value (m/s)
-        vs_range_max: Maximum realistic Vs value (m/s)
-
-    Returns:
-        Generated samples with physics constraints applied
-    """
-    model.eval()
-    u = initial_noise.to(device)
-    dt = 1.0 / ode_steps
-
-    for i in range(ode_steps):
-        # Current time
-        t_val = i * dt
-        t = torch.full((u.shape[0], 1), t_val).to(device)
-
-        # Make `u` require gradients for the guidance step
-        u = u.detach().requires_grad_(True)
-
-        # 1. Get the model's predicted vector field
-        with torch.no_grad():
-            v_pred = model(u, t)
-
-        # 2. Denormalize u to physical values for physics constraint calculations
-        u_phys = dataset.denormalize_batch(u).to(device)
-
-        # 3. Calculate physics constraint losses on physical values
-        # Constraint 1: Positivity (encourage u_phys > vs_range_min)
-        # Penalize values below minimum realistic Vs
-        vs_min_tensor = torch.tensor(vs_range_min, device=device, requires_grad=True)
-        loss_positivity = torch.mean(torch.relu(vs_min_tensor - u_phys))
-
-        # Constraint 2: Range constraint (encourage vs_range_min < u_phys < vs_range_max)
-        # Penalize values above maximum realistic Vs
-        vs_max_tensor = torch.tensor(vs_range_max, device=device, requires_grad=True)
-        loss_range_max = torch.mean(torch.relu(u_phys - vs_max_tensor))
-
-        # Constraint 3: Monotonicity (encourage general increase with depth)
-        # Calculate depth-wise differences
-        diff = u_phys[..., 1:] - u_phys[..., :-1]
-        # Penalize negative trends (decreasing Vs with depth)
-        loss_monotonic = torch.mean(torch.relu(-diff))
-
-        # Constraint 4: Smoothness (avoid sharp discontinuities)
-        # Penalize large second derivatives
-        loss_smoothness = torch.tensor(0.0, device=device, requires_grad=True)
-        if u_phys.shape[-1] > 2:
-            second_diff = u_phys[..., 2:] - 2 * u_phys[..., 1:-1] + u_phys[..., :-2]
-            loss_smoothness = torch.mean(torch.abs(second_diff))
-
-        # Total physics loss
-        loss_physics = (
-            positivity_weight * loss_positivity
-            + positivity_weight * loss_range_max
-            + monotonic_weight * loss_monotonic
-            + smoothness_weight * loss_smoothness
-        )
-
-        # 4. Apply physics guidance if loss is significant
-        if loss_physics.item() > 1e-6:  # Use small threshold to avoid numerical issues
-            try:
-                # Get the gradient of the physics loss w.r.t. the current sample `u`
-                (grad_u,) = torch.autograd.grad(loss_physics, u, retain_graph=False)
-
-                # Define the guidance vector (opposite direction to minimize loss)
-                v_guidance = -grad_u
-
-                # Combine the model's vector field with the guidance vector
-                # Scale guidance to match the magnitude of the predicted vector field
-                v_pred_norm = v_pred.norm(dim=(1, 2), keepdim=True)
-                v_guidance_norm = v_guidance.norm(dim=(1, 2), keepdim=True)
-
-                # Normalize guidance and re-scale by v_pred magnitude
-                v_guidance_scaled = (
-                    v_guidance / (v_guidance_norm + 1e-8)
-                ) * v_pred_norm
-
-                v_corrected = v_pred + v_guidance_scaled * guidance_strength
-            except RuntimeError:
-                # If gradient computation fails, fall back to original vector field
-                v_corrected = v_pred
-        else:
-            # No constraints violated, no guidance needed
-            v_corrected = v_pred
-
-        # 5. Take the Euler step using the corrected vector field
-        u = u.detach()  # Stop tracking gradients for the next step
-        u = u + v_corrected * dt
-
-    return u.detach()
 
 
 def plot_comprehensive_comparison(

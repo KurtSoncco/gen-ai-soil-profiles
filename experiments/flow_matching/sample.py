@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""
-FFM Sampling Script
+"""Flow Matching Sampling Script.
 
-Generate Vs profiles using trained FFM model with Euler ODE solver.
+Generate Vs profiles using a trained flow matching model.
+Uses Euler ODE integration to sample from the learned vector field.
 """
 
 import argparse
@@ -100,21 +100,7 @@ def main() -> None:
     initial_noise = torch.randn(num_samples, 1, max_length).to(device)
 
     # Generate samples
-    if cfg.use_pcfm:
-        samples_normalized = utils_mod.sample_ffm_pcfm(
-            model,
-            initial_noise,
-            ode_steps,
-            device,
-            dataset,
-            guidance_strength=cfg.pcfm_guidance_strength,
-            monotonic_weight=cfg.pcfm_monotonic_weight,
-            positivity_weight=cfg.pcfm_positivity_weight,
-        )
-    else:
-        samples_normalized = utils_mod.sample_ffm(
-            model, initial_noise, ode_steps, device
-        )
+    samples_normalized = utils_mod.sample_ffm(model, initial_noise, ode_steps, device)
 
     # Denormalize samples
     samples = dataset.denormalize_batch(samples_normalized)

@@ -18,8 +18,8 @@ __all__ = ["VsProfilesDataset", "create_dataloader"]
 class VsProfilesDataset(Dataset):
     """Loads Vs profiles from a Parquet file and pads to a fixed length.
 
-    This dataset handles normalization to [0,1] range for stable FFM training
-    and stores normalization parameters for denormalization during sampling.
+    This dataset handles z-score normalization (mean=0, std=1) for stable FFM training
+    with Gaussian base distribution and stores normalization parameters for denormalization.
 
     Expected parquet formats:
     1) Long format: columns [velocity_metadata_id, depth, vs_value]
@@ -67,19 +67,23 @@ class VsProfilesDataset(Dataset):
         self._compute_normalization_params()
 
     def _compute_normalization_params(self):
-        """Compute min/max values across all sequences for normalization."""
+        """Compute mean/std values across all sequences for z-score normalization."""
         all_values = np.concatenate(self.raw_sequences)
+        self.mean_val = float(np.mean(all_values))
+        self.std_val = float(np.std(all_values))
+        # Store original min/max for denormalization (in case needed for padding)
         self.min_val = float(np.min(all_values))
         self.max_val = float(np.max(all_values))
-        print(f"Data normalization: min={self.min_val:.2f}, max={self.max_val:.2f}")
+        print(f"Data normalization: mean={self.mean_val:.2f}, std={self.std_val:.2f}")
+        print(f"Data range: min={self.min_val:.2f}, max={self.max_val:.2f}")
 
     def _normalize_sequence(self, seq: np.ndarray) -> np.ndarray:
-        """Normalize sequence to [0, 1] range."""
-        return (seq - self.min_val) / (self.max_val - self.min_val)
+        """Normalize sequence using z-score: (x - mean) / std."""
+        return (seq - self.mean_val) / self.std_val
 
     def _denormalize_sequence(self, seq: np.ndarray) -> np.ndarray:
-        """Denormalize sequence from [0, 1] back to original range."""
-        return seq * (self.max_val - self.min_val) + self.min_val
+        """Denormalize sequence from z-score back to original scale."""
+        return seq * self.std_val + self.mean_val
 
     def __len__(self) -> int:
         return len(self.raw_sequences)
@@ -97,11 +101,12 @@ class VsProfilesDataset(Dataset):
         seq_normalized = self._normalize_sequence(seq)
 
         # Pad the normalized sequence
+        # Note: for z-score normalization, padding should be 0 (mean-centered)
         padded = np.pad(
             seq_normalized,
             (0, pad_len),
             mode="constant",
-            constant_values=self.pad_value,
+            constant_values=0.0,  # Use 0 for z-score (mean-centered data)
         )
 
         # Shape to (C=1, L)

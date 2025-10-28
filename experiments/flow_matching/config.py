@@ -1,3 +1,9 @@
+"""Configuration for Flow Matching training and evaluation.
+
+This module defines all hyperparameters and paths for training flow matching models
+on Vs (shear wave velocity) profiles.
+"""
+
 from __future__ import annotations
 
 import os
@@ -8,6 +14,12 @@ import torch
 
 @dataclass
 class Config:
+    """Configuration class for Flow Matching experiments.
+
+    This configuration supports both UNet and FNO architectures for unguided
+    flow matching without physics constraints.
+    """
+
     # Data
     parquet_path: str = os.path.abspath(
         os.path.join(
@@ -19,8 +31,10 @@ class Config:
         "velocity_metadata_id"  # optional grouping id per profile; None assumes single-column array-like
     )
     max_length: int | None = None  # if None, inferred from dataset
-    pad_value: float = 0.0
-    batch_size: int = 32  # Reduced from 32
+    pad_value: float = (
+        0.0  # Note: With z-score normalization, padding uses 0 (mean-centered)
+    )
+    batch_size: int = 32
     num_workers: int = 4
 
     # Model Architecture
@@ -33,9 +47,11 @@ class Config:
 
     # FFM Training
     learning_rate: float = 1e-4
+    betas: tuple[float, float] = (0.6, 0.8)
+    weight_decay: float = 1e-4
     num_steps: int = 15000  # number of training steps
-    log_every: int = 100  # log every N steps
-    checkpoint_every: int = 250  # save checkpoint every N steps
+    log_every: int = 500  # log every N steps
+    checkpoint_every: int = 500  # save checkpoint every N steps
 
     # LR Scheduler
     use_scheduler: bool = True  # whether to use LR scheduler
@@ -47,17 +63,11 @@ class Config:
     scheduler_mode: str = "min"  # "min" or "max"
 
     # Regularization
-    tvd_weight: float = 0.01  # Total Variation Diminishing regularization weight
+    tvd_weight: float = 0.00  # Total Variation Diminishing regularization weight
 
     # FFM Sampling
     ode_steps: int = 100  # number of ODE integration steps for sampling
     num_samples: int = 16  # number of samples to generate during evaluation
-
-    # PCFM (Physics-Constrained Flow Matching) Configuration
-    use_pcfm: bool = False  # whether to use PCFM sampler instead of regular FFM
-    pcfm_guidance_strength: float = 1.0  # strength of physics guidance
-    pcfm_monotonic_weight: float = 1.0  # weight for monotonicity constraint
-    pcfm_positivity_weight: float = 1.0  # weight for positivity constraint
 
     # IO
     out_dir: str = os.path.abspath(

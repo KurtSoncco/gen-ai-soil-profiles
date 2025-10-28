@@ -26,13 +26,13 @@ try:
     from . import config as cfg_mod
     from . import models as models_mod
     from . import utils as utils_mod
-    from .data import create_dataloader, VsProfilesDataset
+    from .data import VsProfilesDataset, create_dataloader
 except Exception:  # fallback when running as script
     import config as cfg_mod
     import models as models_mod
     import utils as utils_mod
 
-    from data import create_dataloader, VsProfilesDataset  # type: ignore
+    from data import VsProfilesDataset, create_dataloader  # type: ignore
 
 
 class FFMEvaluator:
@@ -148,21 +148,9 @@ class FFMEvaluator:
                 )
 
                 # Generate samples using ODE solver
-                if self.config.use_pcfm:
-                    samples_normalized = utils_mod.sample_ffm_pcfm(
-                        model,
-                        initial_noise,
-                        self.config.ode_steps,
-                        self.device,
-                        self.dataset,
-                        guidance_strength=self.config.pcfm_guidance_strength,
-                        monotonic_weight=self.config.pcfm_monotonic_weight,
-                        positivity_weight=self.config.pcfm_positivity_weight,
-                    )
-                else:
-                    samples_normalized = utils_mod.sample_ffm(
-                        model, initial_noise, self.config.ode_steps, self.device
-                    )
+                samples_normalized = utils_mod.sample_ffm(
+                    model, initial_noise, self.config.ode_steps, self.device
+                )
 
                 # Denormalize samples before returning
                 samples_denorm = self.dataset.denormalize_batch(samples_normalized)
@@ -251,6 +239,23 @@ class FFMEvaluator:
             real_stats["mean_vs"], gen_stats["mean_vs"]
         )
 
+        # Calculate per-sample MSE for profiles (MMSE and SMSE)
+        # Reshape profiles for comparison: (n_profiles, n_features)
+        profiles_real_flat = real_profiles[:, 0, :]  # (n_real, n_features)
+        profiles_gen_flat = generated_profiles[:, 0, :]  # (n_gen, n_features)
+
+        # Align dimensions by taking min(n_real, n_gen) samples
+        min_samples = min(profiles_real_flat.shape[0], profiles_gen_flat.shape[0])
+        profiles_real_flat = profiles_real_flat[:min_samples]
+        profiles_gen_flat = profiles_gen_flat[:min_samples]
+
+        # Compute per-sample MSEs
+        profile_mse_per_sample = np.mean(
+            (profiles_real_flat - profiles_gen_flat) ** 2, axis=1
+        )
+        comparison["profile_mmse"] = np.mean(profile_mse_per_sample)  # Mean MSE
+        comparison["profile_smse"] = np.std(profile_mse_per_sample)  # Std MSE
+
         # Vs30 comparison
         real_vs30 = self.calculate_vs30(real_profiles)
         gen_vs30 = self.calculate_vs30(generated_profiles)
@@ -259,6 +264,14 @@ class FFMEvaluator:
         comparison["vs30_mae"] = mean_absolute_error(real_vs30, gen_vs30)
         comparison["vs30_ks_statistic"] = stats.ks_2samp(real_vs30, gen_vs30).statistic  # type: ignore
         comparison["vs30_ks_pvalue"] = stats.ks_2samp(real_vs30, gen_vs30).pvalue  # type: ignore
+
+        # Calculate per-sample MSE for Vs30
+        min_samples_vs30 = min(len(real_vs30), len(gen_vs30))
+        vs30_mse_per_sample = (
+            real_vs30[:min_samples_vs30] - gen_vs30[:min_samples_vs30]
+        ) ** 2
+        comparison["vs30_mmse"] = np.mean(vs30_mse_per_sample)  # Mean MSE
+        comparison["vs30_smse"] = np.std(vs30_mse_per_sample)  # Std MSE
 
         # Vs100 comparison
         real_vs100 = self.calculate_vs100(real_profiles)
@@ -271,6 +284,14 @@ class FFMEvaluator:
         ).statistic  # type: ignore
         comparison["vs100_ks_pvalue"] = stats.ks_2samp(real_vs100, gen_vs100).pvalue  # type: ignore
 
+        # Calculate per-sample MSE for Vs100
+        min_samples_vs100 = min(len(real_vs100), len(gen_vs100))
+        vs100_mse_per_sample = (
+            real_vs100[:min_samples_vs100] - gen_vs100[:min_samples_vs100]
+        ) ** 2
+        comparison["vs100_mmse"] = np.mean(vs100_mse_per_sample)  # Mean MSE
+        comparison["vs100_smse"] = np.std(vs100_mse_per_sample)  # Std MSE
+
         # Store statistics
         comparison["real_stats"] = real_stats
         comparison["gen_stats"] = gen_stats
@@ -278,10 +299,16 @@ class FFMEvaluator:
         # Log results
         logging.info(f"  Profile MSE: {comparison['profile_mse']:.4f}")
         logging.info(f"  Profile MAE: {comparison['profile_mae']:.4f}")
+        logging.info(f"  Profile MMSE: {comparison['profile_mmse']:.4f}")
+        logging.info(f"  Profile SMSE: {comparison['profile_smse']:.4f}")
         logging.info(f"  Vs30 MSE: {comparison['vs30_mse']:.4f}")
         logging.info(f"  Vs30 KS statistic: {comparison['vs30_ks_statistic']:.4f}")
+        logging.info(f"  Vs30 MMSE: {comparison['vs30_mmse']:.4f}")
+        logging.info(f"  Vs30 SMSE: {comparison['vs30_smse']:.4f}")
         logging.info(f"  Vs100 MSE: {comparison['vs100_mse']:.4f}")
         logging.info(f"  Vs100 KS statistic: {comparison['vs100_ks_statistic']:.4f}")
+        logging.info(f"  Vs100 MMSE: {comparison['vs100_mmse']:.4f}")
+        logging.info(f"  Vs100 SMSE: {comparison['vs100_smse']:.4f}")
 
         return comparison
 
@@ -723,9 +750,19 @@ def main():
         step = result.get("step", "unknown")
         vs30_ks = result.get("vs30_ks_statistic", "N/A")
         vs100_ks = result.get("vs100_ks_statistic", "N/A")
+        profile_mmse = result.get("profile_mmse", "N/A")
+        profile_smse = result.get("profile_smse", "N/A")
+        vs30_mmse = result.get("vs30_mmse", "N/A")
+        vs30_smse = result.get("vs30_smse", "N/A")
+        vs100_mmse = result.get("vs100_mmse", "N/A")
+        vs100_smse = result.get("vs100_smse", "N/A")
         logging.info(
-            f"Final checkpoint (step {step}): Vs30 KS={vs30_ks:.4f}, Vs100 KS={vs100_ks:.4f}"
+            f"Final checkpoint (step {step}): "
+            f"Vs30 KS={vs30_ks:.4f}, Vs100 KS={vs100_ks:.4f}"
         )
+        logging.info(f"Profile: MMSE={profile_mmse:.4f}, SMSE={profile_smse:.4f}")
+        logging.info(f"Vs30: MMSE={vs30_mmse:.4f}, SMSE={vs30_smse:.4f}")
+        logging.info(f"Vs100: MMSE={vs100_mmse:.4f}, SMSE={vs100_smse:.4f}")
 
         # Save final results
         results_file = evaluator.results_dir / "final_evaluation_results.pkl"

@@ -1,3 +1,9 @@
+"""Training script for Flow Matching models.
+
+This module implements unguided flow matching for training neural networks
+to generate Vs profiles using ODE-based generative modeling.
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -150,7 +156,12 @@ def main() -> None:
 
     # Create model
     model = models_mod.create_model(cfg.model_type, cfg).to(device)
-    optimizer = optim.Adam(model.parameters(), lr=cfg.learning_rate)
+    optimizer = optim.AdamW(
+        model.parameters(),
+        lr=cfg.learning_rate,
+        betas=cfg.betas,
+        weight_decay=cfg.weight_decay,
+    )
 
     # Create LR scheduler
     scheduler = None
@@ -262,24 +273,9 @@ def main() -> None:
                 # Generate and save samples
                 with torch.no_grad():
                     model.eval()
-
-                    # Choose sampler based on configuration
-                    if cfg.use_pcfm:
-                        samples = utils_mod.sample_ffm_pcfm(
-                            model,
-                            z_fixed,
-                            cfg.ode_steps,
-                            device,
-                            dataset,
-                            guidance_strength=cfg.pcfm_guidance_strength,
-                            monotonic_weight=cfg.pcfm_monotonic_weight,
-                            positivity_weight=cfg.pcfm_positivity_weight,
-                        )
-                    else:
-                        samples = utils_mod.sample_ffm(
-                            model, z_fixed, cfg.ode_steps, device
-                        )
-
+                    samples = utils_mod.sample_ffm(
+                        model, z_fixed, cfg.ode_steps, device
+                    )
                     model.train()
 
                     # Denormalize samples
@@ -352,22 +348,7 @@ def main() -> None:
     # Generate final samples
     with torch.no_grad():
         model.eval()
-
-        # Choose sampler based on configuration
-        if cfg.use_pcfm:
-            samples = utils_mod.sample_ffm_pcfm(
-                model,
-                z_fixed,
-                cfg.ode_steps,
-                device,
-                dataset,
-                guidance_strength=cfg.pcfm_guidance_strength,
-                monotonic_weight=cfg.pcfm_monotonic_weight,
-                positivity_weight=cfg.pcfm_positivity_weight,
-            )
-        else:
-            samples = utils_mod.sample_ffm(model, z_fixed, cfg.ode_steps, device)
-
+        samples = utils_mod.sample_ffm(model, z_fixed, cfg.ode_steps, device)
         samples_denorm = dataset.denormalize_batch(samples)
         np.save(
             os.path.join(cfg.out_dir, "samples_final.npy"), samples_denorm.cpu().numpy()
@@ -399,21 +380,9 @@ def main() -> None:
             # Generate final samples for comparison
             with torch.no_grad():
                 model.eval()
-                if cfg.use_pcfm:
-                    final_samples = utils_mod.sample_ffm_pcfm(
-                        model,
-                        z_fixed,
-                        cfg.ode_steps,
-                        device,
-                        dataset,
-                        guidance_strength=cfg.pcfm_guidance_strength,
-                        monotonic_weight=cfg.pcfm_monotonic_weight,
-                        positivity_weight=cfg.pcfm_positivity_weight,
-                    )
-                else:
-                    final_samples = utils_mod.sample_ffm(
-                        model, z_fixed, cfg.ode_steps, device
-                    )
+                final_samples = utils_mod.sample_ffm(
+                    model, z_fixed, cfg.ode_steps, device
+                )
                 final_samples_denorm = dataset.denormalize_batch(final_samples)
                 generated_profiles = final_samples_denorm.cpu().numpy()
 
@@ -461,28 +430,17 @@ if __name__ == "__main__":
     parser.add_argument(
         "--num_steps", type=int, default=None, help="Number of training steps"
     )
-    parser.add_argument(
-        "--use_pcfm", type=str, default=None, help="Use PCFM sampler (true/false)"
-    )
-    parser.add_argument(
-        "--pcfm_guidance_strength",
-        type=float,
-        default=None,
-        help="PCFM guidance strength",
-    )
-    parser.add_argument(
-        "--pcfm_monotonic_weight",
-        type=float,
-        default=None,
-        help="PCFM monotonic weight",
-    )
-    parser.add_argument(
-        "--pcfm_positivity_weight",
-        type=float,
-        default=None,
-        help="PCFM positivity weight",
-    )
     parser.add_argument("--tvd_weight", type=float, default=None, help="TVD weight")
+    parser.add_argument(
+        "--betas",
+        type=float,
+        nargs=2,
+        default=None,
+        help="Adam optimizer betas (e.g., --betas 0.6 0.8)",
+    )
+    parser.add_argument(
+        "--weight_decay", type=float, default=None, help="Adam optimizer weight decay"
+    )
     parser.add_argument("--wandb_name", type=str, default=None, help="Wandb run name")
 
     args = parser.parse_args()
@@ -490,16 +448,12 @@ if __name__ == "__main__":
     # Override config with command line arguments
     if args.num_steps is not None:
         cfg_mod.cfg.num_steps = args.num_steps
-    if args.use_pcfm is not None:
-        cfg_mod.cfg.use_pcfm = args.use_pcfm.lower() == "true"
-    if args.pcfm_guidance_strength is not None:
-        cfg_mod.cfg.pcfm_guidance_strength = args.pcfm_guidance_strength
-    if args.pcfm_monotonic_weight is not None:
-        cfg_mod.cfg.pcfm_monotonic_weight = args.pcfm_monotonic_weight
-    if args.pcfm_positivity_weight is not None:
-        cfg_mod.cfg.pcfm_positivity_weight = args.pcfm_positivity_weight
     if args.tvd_weight is not None:
         cfg_mod.cfg.tvd_weight = args.tvd_weight
+    if args.betas is not None:
+        cfg_mod.cfg.betas = tuple(args.betas)
+    if args.weight_decay is not None:
+        cfg_mod.cfg.weight_decay = args.weight_decay
     if args.wandb_name is not None:
         cfg_mod.cfg.wandb_name = args.wandb_name
 
