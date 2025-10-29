@@ -17,7 +17,7 @@
 #SBATCH --qos=a40_gpu3_normal
 
 # Wall clock limit (set to 40 minutes for training):
-#SBATCH --time=00:40:00
+#SBATCH --time=01:00:00
 
 ## Load required modules
 module load anaconda3 cuda cudnn pytorch gcc/13.2.0 openblas/0.3.24
