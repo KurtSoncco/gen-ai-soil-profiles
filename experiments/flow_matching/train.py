@@ -12,7 +12,6 @@ import random
 
 import numpy as np
 import torch
-import torch.nn as nn
 import torch.optim as optim
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from tqdm import tqdm
@@ -59,7 +58,7 @@ def set_seed(seed: int) -> None:
     torch.cuda.manual_seed_all(seed)
 
 
-def train_ffm_step(model, optimizer, batch, config):
+def train_ffm_step(model, optimizer, batch, config, dataset, avg_samples_per_meter):
     """
     Single FFM training step.
 
@@ -106,18 +105,34 @@ def train_ffm_step(model, optimizer, batch, config):
     predicted_v = model(ut, t)
 
     # --- Loss calculation ---
-    reconstruction_loss = nn.L1Loss()(predicted_v, target_v)
+    # L2 (MSE) reconstruction loss
+    reconstruction_loss = torch.mean((predicted_v - target_v) ** 2)
 
-    # Add TVD regularization to encourage smoothness
-    tvd_loss = compute_tvd_loss(predicted_v)
+    # Estimate u at t=1 using one-step extrapolation: u_hat ≈ ut + v_pred * (1 - t)
+    remaining = torch.clamp(1 - t_broadcast, min=1e-6)
+    u_hat_est = ut + predicted_v * remaining
 
-    # Add kinetic energy regularization to penalize large velocity magnitudes
-    kinetic_energy = torch.mean(predicted_v**2)
+    # Compute SMSE for Vs30 and Vs100 between u_hat_est and real u1 (denormalized)
+    with torch.no_grad():
+        u_hat_den = dataset.denormalize_batch(u_hat_est).cpu().numpy()
+        u1_den = dataset.denormalize_batch(u1).cpu().numpy()
+        vs30_pred = utils_mod.compute_generated_vs30(u_hat_den, avg_samples_per_meter)
+        vs30_real = utils_mod.compute_generated_vs30(u1_den, avg_samples_per_meter)
+        vs100_pred = utils_mod.compute_vs100(u_hat_den, avg_samples_per_meter)
+        vs100_real = utils_mod.compute_vs100(u1_den, avg_samples_per_meter)
+
+        vs30_se = (vs30_pred - vs30_real) ** 2
+        vs100_se = (vs100_pred - vs100_real) ** 2
+        vs30_smse = float(np.std(vs30_se))
+        vs100_smse = float(np.std(vs100_se))
+
+    vs30_smse_t = torch.tensor(vs30_smse, device=device)
+    vs100_smse_t = torch.tensor(vs100_smse, device=device)
 
     total_loss = (
         reconstruction_loss
-        + config.tvd_weight * tvd_loss
-        + config.kinetic_energy_weight * kinetic_energy
+        + config.vs30_smse_weight * vs30_smse_t
+        + config.vs100_smse_weight * vs100_smse_t
     )
 
     # --- Backward pass ---
@@ -128,8 +143,8 @@ def train_ffm_step(model, optimizer, batch, config):
     return (
         total_loss.item(),
         reconstruction_loss.item(),
-        tvd_loss.item(),
-        kinetic_energy.item(),
+        vs30_smse,
+        vs100_smse,
     )
 
 
@@ -225,8 +240,13 @@ def main() -> None:
                 batch = next(dataloader_iter)
 
             try:
-                total_loss, reconstruction_loss, tvd_loss, kinetic_energy = (
-                    train_ffm_step(model, optimizer, batch, cfg)
+                total_loss, reconstruction_loss, vs30_smse, vs100_smse = train_ffm_step(
+                    model,
+                    optimizer,
+                    batch,
+                    cfg,
+                    dataset,
+                    avg_samples_per_meter,
                 )
                 loss_history.append(total_loss)
             except Exception as e:
@@ -257,15 +277,15 @@ def main() -> None:
                         "step": step,
                         "train/total_loss": total_loss,
                         "train/reconstruction_loss": reconstruction_loss,
-                        "train/tvd_loss": tvd_loss,
-                        "train/kinetic_energy": kinetic_energy,
+                        "train/vs30_smse": vs30_smse,
+                        "train/vs100_smse": vs100_smse,
                         "train/lr": optimizer.param_groups[0]["lr"],
                     }
                 )
 
             if step % cfg.log_every == 0:
                 print(
-                    f"step={step} total_loss={total_loss:.6f} reconstruction_loss={reconstruction_loss:.6f} tvd_loss={tvd_loss:.6f} kinetic_energy={kinetic_energy:.6f}"
+                    f"step={step} total_loss={total_loss:.6f} reconstruction_loss={reconstruction_loss:.6f} vs30_smse={vs30_smse:.6f} vs100_smse={vs100_smse:.6f}"
                 )
 
             if step % cfg.checkpoint_every == 0 and step > 0:

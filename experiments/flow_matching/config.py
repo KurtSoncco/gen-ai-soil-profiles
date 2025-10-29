@@ -56,23 +56,23 @@ class Config:
     # LR Scheduler
     use_scheduler: bool = True  # whether to use LR scheduler
     scheduler_patience: int = (
-        500  # ReduceLROnPlateau patience (recommended: 1000-1500 for 15k steps)
+        1000  # ReduceLROnPlateau patience (recommended: 1000-1500 for 15k steps)
     )
     scheduler_factor: float = 0.5  # ReduceLROnPlateau factor
     scheduler_min_lr: float = 1e-6  # minimum learning rate
     scheduler_mode: str = "min"  # "min" or "max"
 
     # Regularization
-    tvd_weight: float = 0.00  # Total Variation Diminishing regularization weight
-    kinetic_energy_weight: float = (
-        0.1  # Kinetic energy regularization weight (penalizes ||v||²)
-    )
+    tvd_weight: float = 0.0  # TVD disabled
+    kinetic_energy_weight: float = 0.0  # Kinetic energy disabled
+    vs30_smse_weight: float = 1.0  # Weight for SMSE of Vs30
+    vs100_smse_weight: float = 1.0  # Weight for SMSE of Vs100
 
     # FFM Sampling
     ode_steps: int = (
-        100  # number of ODE integration steps for sampling (increased for RK45)
+        50  # number of ODE integration steps for sampling (increased for RK45)
     )
-    num_samples: int = 16  # number of samples to generate during evaluation
+    num_samples: int = 32  # number of samples to generate during evaluation
 
     # IO
     out_dir: str = os.path.abspath(
