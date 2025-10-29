@@ -6,7 +6,7 @@ This module implements unguided Flow Matching (FFM) for generating Vs (shear wav
 
 Flow Matching is a generative modeling technique that learns a neural vector field to transport noise to realistic data. This implementation focuses on unguided flow matching without physics constraints.
 
-**Normalization**: Data is normalized using z-score normalization (mean=0, std=1) which aligns with the Gaussian base distribution used during training and sampling. All outputs and metrics are reported in the original (unnormalized) Vs scale.
+**Normalization**: Data is transformed with log1p (y = log1p(Vs)) and then z-score normalized (mean=0, std=1), aligning with the Gaussian base distribution used during training and sampling. All outputs and metrics are denormalized back to Vs using expm1.
 
 ## Architecture
 
@@ -63,12 +63,14 @@ Edit `config.py` to modify:
 
 The model learns a vector field `v_θ(u, t)` that transforms noise into realistic profiles:
 - Training: MSE loss between predicted and target vector fields
-- Sampling: ODE integration from t=0 to t=1 using Euler method
+- Sampling: ODE integration from t=0 to t=1 using RK4 (Runge-Kutta 4)
 
 ### Loss Function
 
 ```
-L = MSE(v_predicted, v_target) + λ_TVD * TVD(v_predicted)
+L = MSE(v_predicted, v_target)
+    + λ_TVD * TVD(v_predicted)
+    + λ_KE * ||v_predicted||^2
 ```
 
 Where:

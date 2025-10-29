@@ -18,8 +18,9 @@ __all__ = ["VsProfilesDataset", "create_dataloader"]
 class VsProfilesDataset(Dataset):
     """Loads Vs profiles from a Parquet file and pads to a fixed length.
 
-    This dataset handles z-score normalization (mean=0, std=1) for stable FFM training
-    with Gaussian base distribution and stores normalization parameters for denormalization.
+    This dataset applies a log1p transform followed by z-score normalization
+    (mean=0, std=1) for stable FFM training with a Gaussian base distribution,
+    and stores parameters to invert back to the original Vs scale using expm1.
 
     Expected parquet formats:
     1) Long format: columns [velocity_metadata_id, depth, vs_value]
@@ -67,23 +68,46 @@ class VsProfilesDataset(Dataset):
         self._compute_normalization_params()
 
     def _compute_normalization_params(self):
-        """Compute mean/std values across all sequences for z-score normalization."""
+        """Compute mean/std in log-space for z-score normalization.
+
+        We normalize log1p(Vs): y = log1p(Vs).
+        Store mean/std of y so that normalization is (y - mean) / std.
+        Denormalization will be: Vs = expm1(std * x + mean).
+        """
         all_values = np.concatenate(self.raw_sequences)
-        self.mean_val = float(np.mean(all_values))
-        self.std_val = float(np.std(all_values))
-        # Store original min/max for denormalization (in case needed for padding)
+        # Ensure positivity for log1p; Vs should be positive but clip just in case
+        all_values = np.clip(all_values, a_min=0.0, a_max=None)
+        all_values_log = np.log1p(all_values)
+
+        self.mean_val = float(np.mean(all_values_log))
+        self.std_val = float(np.std(all_values_log) + 1e-8)
+
+        # Store original min/max (for informational prints)
         self.min_val = float(np.min(all_values))
         self.max_val = float(np.max(all_values))
-        print(f"Data normalization: mean={self.mean_val:.2f}, std={self.std_val:.2f}")
-        print(f"Data range: min={self.min_val:.2f}, max={self.max_val:.2f}")
+
+        print(
+            f"Data normalization (log1p z-score): mean={self.mean_val:.4f}, std={self.std_val:.4f}"
+        )
+        print(f"Data range (Vs): min={self.min_val:.2f}, max={self.max_val:.2f}")
 
     def _normalize_sequence(self, seq: np.ndarray) -> np.ndarray:
-        """Normalize sequence using z-score: (x - mean) / std."""
-        return (seq - self.mean_val) / self.std_val
+        """Normalize sequence using log1p + z-score.
+
+        x = Vs -> y = log1p(x) -> z = (y - mean) / std
+        """
+        seq = np.clip(seq, a_min=0.0, a_max=None)
+        y = np.log1p(seq)
+        return (y - self.mean_val) / self.std_val
 
     def _denormalize_sequence(self, seq: np.ndarray) -> np.ndarray:
-        """Denormalize sequence from z-score back to original scale."""
-        return seq * self.std_val + self.mean_val
+        """Denormalize sequence back to original Vs scale.
+
+        z -> y = z * std + mean -> x = expm1(y)
+        """
+        y = seq * self.std_val + self.mean_val
+        x = np.expm1(y)
+        return x
 
     def __len__(self) -> int:
         return len(self.raw_sequences)
