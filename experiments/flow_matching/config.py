@@ -34,7 +34,7 @@ class Config:
     pad_value: float = (
         0.0  # Note: With z-score normalization, padding uses 0 (mean-centered)
     )
-    batch_size: int = 32
+    batch_size: int = 128
     num_workers: int = 4
 
     # Model Architecture
@@ -49,7 +49,7 @@ class Config:
     learning_rate: float = 1e-4
     betas: tuple[float, float] = (0.6, 0.8)
     weight_decay: float = 1e-4
-    num_steps: int = 5000  # number of training steps
+    num_steps: int = 8000  # number of training steps
     log_every: int = 250  # log every N steps
     checkpoint_every: int = 500  # save checkpoint every N steps
 

@@ -9,7 +9,6 @@ from __future__ import annotations
 import argparse
 import os
 import random
-from dataclasses import asdict
 
 import numpy as np
 import torch
@@ -107,7 +106,7 @@ def train_ffm_step(model, optimizer, batch, config):
     predicted_v = model(ut, t)
 
     # --- Loss calculation ---
-    mse_loss = nn.MSELoss()(predicted_v, target_v)
+    reconstruction_loss = nn.L1Loss()(predicted_v, target_v)
 
     # Add TVD regularization to encourage smoothness
     tvd_loss = compute_tvd_loss(predicted_v)
@@ -116,7 +115,7 @@ def train_ffm_step(model, optimizer, batch, config):
     kinetic_energy = torch.mean(predicted_v**2)
 
     total_loss = (
-        mse_loss
+        reconstruction_loss
         + config.tvd_weight * tvd_loss
         + config.kinetic_energy_weight * kinetic_energy
     )
@@ -126,7 +125,12 @@ def train_ffm_step(model, optimizer, batch, config):
     total_loss.backward()
     optimizer.step()
 
-    return total_loss.item(), mse_loss.item(), tvd_loss.item(), kinetic_energy.item()
+    return (
+        total_loss.item(),
+        reconstruction_loss.item(),
+        tvd_loss.item(),
+        kinetic_energy.item(),
+    )
 
 
 def main() -> None:
@@ -144,12 +148,14 @@ def main() -> None:
 
         wandb = wandb_module
         wandb_name = cfg.wandb_name or f"ffm_{cfg.model_type}_{cfg.num_steps}steps"
+        wandb_name = cfg.wandb_name or f"ffm_{cfg.model_type}_{cfg.num_steps}steps"
         wandb.init(
             project=cfg.wandb_project,
-            config=asdict(cfg),
+            config=vars(cfg),
             name=wandb_name,
         )
         print("[info] wandb initialized")
+
     except ImportError:
         print("[info] wandb not available, continuing without it")
         wandb = None
@@ -219,8 +225,8 @@ def main() -> None:
                 batch = next(dataloader_iter)
 
             try:
-                total_loss, mse_loss, tvd_loss, kinetic_energy = train_ffm_step(
-                    model, optimizer, batch, cfg
+                total_loss, reconstruction_loss, tvd_loss, kinetic_energy = (
+                    train_ffm_step(model, optimizer, batch, cfg)
                 )
                 loss_history.append(total_loss)
             except Exception as e:
@@ -250,7 +256,7 @@ def main() -> None:
                     {
                         "step": step,
                         "train/total_loss": total_loss,
-                        "train/mse_loss": mse_loss,
+                        "train/reconstruction_loss": reconstruction_loss,
                         "train/tvd_loss": tvd_loss,
                         "train/kinetic_energy": kinetic_energy,
                         "train/lr": optimizer.param_groups[0]["lr"],
@@ -259,7 +265,7 @@ def main() -> None:
 
             if step % cfg.log_every == 0:
                 print(
-                    f"step={step} total_loss={total_loss:.6f} mse_loss={mse_loss:.6f} tvd_loss={tvd_loss:.6f} kinetic_energy={kinetic_energy:.6f}"
+                    f"step={step} total_loss={total_loss:.6f} reconstruction_loss={reconstruction_loss:.6f} tvd_loss={tvd_loss:.6f} kinetic_energy={kinetic_energy:.6f}"
                 )
 
             if step % cfg.checkpoint_every == 0 and step > 0:
@@ -267,11 +273,10 @@ def main() -> None:
                 checkpoint = {
                     "model": model.state_dict(),
                     "optimizer": optimizer.state_dict(),
-                    "config": asdict(cfg),
+                    "config": vars(cfg),
                     "step": step,
                     "loss_history": loss_history,
                     "dataset_min": dataset.min_val,
-                    "dataset_max": dataset.max_val,
                 }
                 if scheduler is not None:
                     checkpoint["scheduler"] = scheduler.state_dict()
@@ -341,14 +346,14 @@ def main() -> None:
     pbar.close()
 
     # Save final checkpoint
+    # Save final checkpoint
     checkpoint = {
         "model": model.state_dict(),
         "optimizer": optimizer.state_dict(),
-        "config": asdict(cfg),
+        "config": vars(cfg),
         "step": step,
         "loss_history": loss_history,
         "dataset_min": dataset.min_val,
-        "dataset_max": dataset.max_val,
     }
     if scheduler is not None:
         checkpoint["scheduler"] = scheduler.state_dict()
