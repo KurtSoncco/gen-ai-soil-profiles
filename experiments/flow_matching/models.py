@@ -293,6 +293,47 @@ def create_model(model_type: str, config) -> nn.Module:
         raise ValueError(f"Unknown model type: {model_type}. Choose 'unet' or 'fno'.")
 
 
+# ===== Discriminator =====
+
+
+class Discriminator1D(nn.Module):
+    """Simple 1D CNN discriminator for profiles.
+
+    Input: (B, 1, L) normalized profiles
+    Output: (B, 1) logits
+    """
+
+    def __init__(self, base_channels: int = 64):
+        super().__init__()
+        c = base_channels
+        self.net = nn.Sequential(
+            nn.Conv1d(1, c, kernel_size=7, stride=2, padding=3),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Conv1d(c, c * 2, kernel_size=5, stride=2, padding=2),
+            nn.GroupNorm(8, c * 2),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Conv1d(c * 2, c * 4, kernel_size=5, stride=2, padding=2),
+            nn.GroupNorm(8, c * 4),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Conv1d(c * 4, c * 4, kernel_size=3, stride=2, padding=1),
+            nn.LeakyReLU(0.2, inplace=True),
+        )
+        self.head = nn.Sequential(
+            nn.AdaptiveAvgPool1d(1),
+            nn.Flatten(),
+            nn.Linear(c * 4, 1),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        h = self.net(x)
+        logits = self.head(h)
+        return logits
+
+
+def create_discriminator(cfg) -> nn.Module:
+    return Discriminator1D(base_channels=getattr(cfg, "disc_dim", 64))
+
+
 if __name__ == "__main__":
     # Test both models
     cfg = config.cfg

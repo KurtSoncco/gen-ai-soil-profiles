@@ -12,6 +12,7 @@ import random
 
 import numpy as np
 import torch
+import torch.nn as nn
 import torch.optim as optim
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from tqdm import tqdm
@@ -185,12 +186,15 @@ def main() -> None:
 
     # Create model
     model = models_mod.create_model(cfg.model_type, cfg).to(device)
+    discriminator = models_mod.create_discriminator(cfg).to(device)
     optimizer = optim.AdamW(
         model.parameters(),
         lr=cfg.learning_rate,
         betas=cfg.betas,
         weight_decay=cfg.weight_decay,
     )
+    optim_d = optim.AdamW(discriminator.parameters(), lr=cfg.disc_lr, betas=cfg.betas)
+    bce = nn.BCEWithLogitsLoss()
 
     # Create LR scheduler
     scheduler = None
@@ -240,14 +244,43 @@ def main() -> None:
                 batch = next(dataloader_iter)
 
             try:
+                # --- Forward FFM step (compute losses)
                 total_loss, reconstruction_loss, vs30_smse, vs100_smse = train_ffm_step(
-                    model,
-                    optimizer,
-                    batch,
-                    cfg,
-                    dataset,
-                    avg_samples_per_meter,
+                    model, optimizer, batch, cfg, dataset, avg_samples_per_meter
                 )
+
+                # --- Adversarial losses (ASFM-style one-step guidance)
+                with torch.no_grad():
+                    # Reuse u0,u1 via batch; recompute minimal state
+                    u1 = batch.to(device)
+                    t = torch.rand(u1.shape[0], 1, device=device)
+                    t_b = t.view(-1, 1, 1).expand(-1, 1, u1.shape[-1])
+                    u0 = torch.randn_like(u1)
+                    ut = (1 - t_b) * u0 + t_b * u1
+                    v_pred = model(ut, t)
+                    remaining = torch.clamp(1 - t_b, min=1e-6)
+                    u_hat_est = ut + v_pred * remaining
+
+                # Train D: real=1, fake=0 (on normalized space)
+                discriminator.train()
+                optim_d.zero_grad()
+                logits_real = discriminator(u1)
+                logits_fake = discriminator(u_hat_est.detach())
+                labels_real = torch.ones_like(logits_real)
+                labels_fake = torch.zeros_like(logits_fake)
+                loss_d = bce(logits_real, labels_real) + bce(logits_fake, labels_fake)
+                loss_d.backward()
+                optim_d.step()
+
+                # Generator adversarial loss (fool D)
+                logits_fake_for_g = discriminator(u_hat_est)
+                loss_g_adv = bce(logits_fake_for_g, torch.ones_like(logits_fake_for_g))
+
+                # Add to last total loss and step generator a tiny extra step
+                if cfg.adv_weight > 0:
+                    optimizer.zero_grad()
+                    (cfg.adv_weight * loss_g_adv).backward()
+                    optimizer.step()
                 loss_history.append(total_loss)
             except Exception as e:
                 print(f"Error in training step {step}: {e}")
@@ -279,6 +312,8 @@ def main() -> None:
                         "train/reconstruction_loss": reconstruction_loss,
                         "train/vs30_smse": vs30_smse,
                         "train/vs100_smse": vs100_smse,
+                        "train/loss_d": loss_d.item(),
+                        "train/loss_g_adv": loss_g_adv.item(),
                         "train/lr": optimizer.param_groups[0]["lr"],
                     }
                 )

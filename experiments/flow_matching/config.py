@@ -50,8 +50,8 @@ class Config:
     betas: tuple[float, float] = (0.6, 0.8)
     weight_decay: float = 1e-4
     num_steps: int = 8000  # number of training steps
-    log_every: int = 250  # log every N steps
-    checkpoint_every: int = 500  # save checkpoint every N steps
+    log_every: int = 150  # log every N steps
+    checkpoint_every: int = 150  # save checkpoint every N steps
 
     # LR Scheduler
     use_scheduler: bool = True  # whether to use LR scheduler
@@ -62,11 +62,14 @@ class Config:
     scheduler_min_lr: float = 1e-6  # minimum learning rate
     scheduler_mode: str = "min"  # "min" or "max"
 
-    # Regularization
+    # Regularization / adversarial
     tvd_weight: float = 0.0  # TVD disabled
     kinetic_energy_weight: float = 0.0  # Kinetic energy disabled
     vs30_smse_weight: float = 1.0  # Weight for SMSE of Vs30
     vs100_smse_weight: float = 1.0  # Weight for SMSE of Vs100
+    adv_weight: float = 0.1  # Generator adversarial loss weight
+    disc_lr: float = 1e-4  # Discriminator learning rate
+    disc_dim: int = 64
 
     # FFM Sampling
     ode_steps: int = (
