@@ -26,6 +26,7 @@ dependencies = [
     "jax[cuda12]",
     "numpyro[cuda]",
     "arviz",
+    "torchinfo",
     
 ]
 
