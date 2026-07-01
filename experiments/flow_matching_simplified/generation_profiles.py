@@ -184,6 +184,8 @@ def load_model(
         time_emb_dim=config.time_emb_dim,
         use_sequence_stats=config.use_sequence_stats,
         stats_dim=config.stats_dim,
+        use_depth_conv=getattr(config, "use_depth_conv", True),
+        depth_conv_kernel_size=getattr(config, "depth_conv_kernel_size", 3),
     ).to(device)
 
     checkpoint = torch.load(checkpoint_path, map_location=device)

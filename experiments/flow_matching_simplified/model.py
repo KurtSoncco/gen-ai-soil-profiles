@@ -66,6 +66,53 @@ class PositionalEncoding(nn.Module):
         return self.dropout(x)
 
 
+class DepthConvBlock(nn.Module):
+    """Shallow 1D conv along depth to encourage vertical coherence.
+    
+    This module applies a 1D convolution along the sequence (depth) dimension
+    to encourage smoothness and improve short-lag correlations (1-2m).
+    Uses a residual connection to preserve original features.
+    """
+
+    def __init__(self, d_model: int, kernel_size: int = 3, dropout: float = 0.0):
+        """
+        Args:
+            d_model: Hidden dimension (same as transformer)
+            kernel_size: Convolution kernel size (default: 3 for immediate neighbors)
+            dropout: Dropout rate (default: 0.0, can increase to 0.1 for regularization)
+        """
+        super().__init__()
+        padding = kernel_size // 2  # Keep sequence length unchanged
+        self.conv = nn.Conv1d(
+            in_channels=d_model,
+            out_channels=d_model,
+            kernel_size=kernel_size,
+            padding=padding,
+            groups=1,
+        )
+        self.norm = nn.LayerNorm(d_model)
+        self.act = nn.SiLU()
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            x: Tensor of shape (batch_size, seq_len, d_model)
+        Returns:
+            Tensor of shape (batch_size, seq_len, d_model) with depth convolution applied
+        """
+        # Conv1d expects (B, C, L), so transpose
+        x_in = x.transpose(1, 2)  # (B, d_model, seq_len)
+        x_conv = self.conv(x_in)  # (B, d_model, seq_len)
+        x_conv = x_conv.transpose(1, 2)  # Back to (B, seq_len, d_model)
+        
+        # Residual connection + activation + dropout
+        x_out = x + self.dropout(self.act(x_conv))
+        
+        # Layer normalization
+        return self.norm(x_out)
+
+
 class TransformerModel(nn.Module):
     """Transformer Model for Flow Matching with Variable-Length Paired Token Breakpoints.
 
@@ -89,6 +136,8 @@ class TransformerModel(nn.Module):
         time_emb_dim: int = 128,
         use_sequence_stats: bool = True,
         stats_dim: int = 4,  # ts_mean, ts_std, depth_mean, depth_std
+        use_depth_conv: bool = True,  # Enable depth convolution for vertical smoothness
+        depth_conv_kernel_size: int = 3,  # Kernel size for depth convolution
     ):
         super().__init__()
         self.input_dim = input_dim
@@ -101,6 +150,7 @@ class TransformerModel(nn.Module):
         self.time_emb_dim = time_emb_dim
         self.use_sequence_stats = use_sequence_stats
         self.stats_dim = stats_dim
+        self.use_depth_conv = use_depth_conv
 
         # Input projection: (batch_size, max_length, 2) -> (batch_size, max_length, hidden_dim)
         self.input_projection = nn.Linear(input_dim, hidden_dim)
@@ -120,6 +170,14 @@ class TransformerModel(nn.Module):
         self.pos_encoder = PositionalEncoding(
             hidden_dim, max_len=max_length, dropout=dropout
         )
+
+        # Depth convolution block for vertical smoothness (optional)
+        if use_depth_conv:
+            self.depth_conv = DepthConvBlock(
+                hidden_dim, kernel_size=depth_conv_kernel_size, dropout=dropout
+            )
+        else:
+            self.depth_conv = None
 
         # Transformer encoder
         encoder_layer = nn.TransformerEncoderLayer(
@@ -206,6 +264,10 @@ class TransformerModel(nn.Module):
 
         # Add positional encoding (x is already in batch_first format)
         x = self.pos_encoder(x)  # (batch_size, seq_len, hidden_dim)
+
+        # Apply depth convolution for vertical smoothness (if enabled)
+        if self.depth_conv is not None:
+            x = self.depth_conv(x)  # (batch_size, seq_len, hidden_dim)
 
         # Apply transformer encoder with attention mask to ignore padded tokens
         # src_key_padding_mask: (batch_size, seq_len) - True for positions to mask out (padding)

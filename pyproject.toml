@@ -27,7 +27,6 @@ dependencies = [
     "numpyro[cuda]",
     "arviz",
     "torchinfo",
-    
 ]
 
 [project.optional-dependencies]
@@ -41,7 +40,6 @@ packages = ["soilgen_ai"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
-
 
 [tool.uv]
 package = true

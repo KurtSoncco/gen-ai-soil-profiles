@@ -38,6 +38,8 @@ class Config:
     time_emb_dim: int = 128
     use_sequence_stats: bool = True  # Use per-sequence statistics conditioning
     stats_dim: int = 4  # ts_mean, ts_std, depth_mean, depth_std
+    use_depth_conv: bool = True  # Enable depth convolution for vertical smoothness
+    depth_conv_kernel_size: int = 3  # Kernel size for depth convolution (3 = immediate neighbors)
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
 
     # Training

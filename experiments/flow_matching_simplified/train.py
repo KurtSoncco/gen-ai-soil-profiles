@@ -623,6 +623,8 @@ def main() -> None:
         time_emb_dim=cfg.time_emb_dim,
         use_sequence_stats=cfg.use_sequence_stats,
         stats_dim=cfg.stats_dim,
+        use_depth_conv=getattr(cfg, "use_depth_conv", True),
+        depth_conv_kernel_size=getattr(cfg, "depth_conv_kernel_size", 3),
     ).to(device)
 
     print(f"Model parameters: {sum(p.numel() for p in model.parameters()):,}")

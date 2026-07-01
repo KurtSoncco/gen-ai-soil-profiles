@@ -7,6 +7,7 @@ Uses ODE integration to sample from the learned vector field.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 from pathlib import Path
 
@@ -19,7 +20,7 @@ except ImportError:
     wandb = None
 
 from experiments.flow_matching_simplified import config as cfg_mod
-from experiments.flow_matching_simplified.data import FlowMatchingDataLoader, FlowMatchingDataset
+from experiments.flow_matching_simplified.data import FlowMatchingDataLoader
 from experiments.flow_matching_simplified.model import TransformerModel
 from experiments.flow_matching_simplified.train import sample_sequences
 from experiments.flow_matching_simplified.utils import compute_sequence_statistics
@@ -71,6 +72,8 @@ def load_checkpoint(
         time_emb_dim=config.time_emb_dim,
         use_sequence_stats=config.use_sequence_stats,
         stats_dim=config.stats_dim,
+        use_depth_conv=getattr(config, "use_depth_conv", True),
+        depth_conv_kernel_size=getattr(config, "depth_conv_kernel_size", 3),
     ).to(device)
 
     model.load_state_dict(checkpoint["model"])
@@ -147,7 +150,7 @@ def main() -> None:
             name=wandb_name,
             config=vars(cfg),
         )
-        print(f"[info] wandb initialized for sampling")
+        print("[info] wandb initialized for sampling")
 
     # Load model
     print(f"Loading model from {checkpoint_path}")
@@ -190,14 +193,18 @@ def main() -> None:
     # Compute statistics
     gen_stats = compute_sequence_statistics(list(generated_sequences))
     print("\nGenerated sequences statistics:")
-    print(f"  Mean length: {gen_stats['mean_length']:.2f} ± {gen_stats['std_length']:.2f}")
+    print(
+        f"  Mean length: {gen_stats['mean_length']:.2f} ± {gen_stats['std_length']:.2f}"
+    )
     print(f"  Mean TS: {gen_stats['mean_ts']:.4f} ± {gen_stats['std_ts']:.4f}")
     print(f"  Mean depth: {gen_stats['mean_depth']:.4f} ± {gen_stats['std_depth']:.4f}")
 
     # Save samples
     if args.output_path is None:
         os.makedirs(cfg.samples_dir, exist_ok=True)
-        output_path = os.path.join(cfg.samples_dir, f"generated_samples_epoch_{epoch}.npy")
+        output_path = os.path.join(
+            cfg.samples_dir, f"generated_samples_epoch_{epoch}.npy"
+        )
     else:
         output_path = args.output_path
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
@@ -218,4 +225,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

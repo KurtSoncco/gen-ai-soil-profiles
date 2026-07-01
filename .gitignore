@@ -49,3 +49,5 @@ wandb/
 # OS files
 .DS_Store
 Thumbs.db
+outputs/
+**/outputs/

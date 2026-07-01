@@ -73,6 +73,27 @@ def tts_depth_to_vs(sequence: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     return depths, vs_values
 
 
+def has_valid_vs(sequence: np.ndarray, min_vs: float = 100.0) -> bool:
+    """Check if a sequence has all Vs values >= min_vs.
+
+    Args:
+        sequence: Array of shape (n, 2) with [TTS, depth] pairs
+        min_vs: Minimum Vs value in m/s (default: 100.0)
+
+    Returns:
+        True if all Vs values are >= min_vs, False otherwise
+    """
+    if len(sequence) == 0:
+        return False
+
+    _, vs_values = tts_depth_to_vs(sequence)
+
+    if len(vs_values) == 0:
+        return False
+
+    return bool(np.all(vs_values >= min_vs))
+
+
 def plot_tts_vs_depth_comparison(
     real_sequences: list[np.ndarray],
     generated_sequences: list[np.ndarray],
@@ -89,46 +110,99 @@ def plot_tts_vs_depth_comparison(
     """
     n_profiles = min(n_profiles, len(real_sequences), len(generated_sequences))
 
-    # Get colorblind-friendly colors
+    # Get colorblind-friendly colors - use three different colors
     colors = sns.color_palette("colorblind")
-    real_color = colors[0]  # First color for real
-    gen_color = colors[1]  # Second color for generated
+    color1 = colors[0]
+    color2 = colors[1]
+    color3 = colors[2]
 
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 8), sharey=True)
+    # Sample different profiles for second and third subplots
+    np.random.seed(42)  # For reproducibility
+    n_gen = len(generated_sequences)
+    if n_gen >= 2 * n_profiles:
+        # Sample different profiles for second and third subplots
+        gen_indices_2 = np.random.choice(n_gen, n_profiles, replace=False)
+        remaining_indices = np.setdiff1d(np.arange(n_gen), gen_indices_2)
+        gen_indices_3 = np.random.choice(remaining_indices, n_profiles, replace=False)
+    else:
+        # If not enough profiles, sample with replacement but ensure different sets
+        gen_indices_2 = np.random.choice(n_gen, n_profiles, replace=True)
+        gen_indices_3 = np.random.choice(n_gen, n_profiles, replace=True)
 
-    # Plot real profiles
+    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(15, 8), sharey=True)
+
+    # Collect all TTS and depth values to determine axis limits
+    all_tts_values = []
+    all_depth_values = []
+
+    # Plot real profiles (first subplot)
     for i in range(n_profiles):
         real_seq = real_sequences[i]
         if len(real_seq) > 0:
             seq_with_origin = prepend_origin(real_seq)
+            all_tts_values.extend(seq_with_origin[:, 0])
+            all_depth_values.extend(seq_with_origin[:, 1])
             ax1.plot(
                 seq_with_origin[:, 0],
                 seq_with_origin[:, 1],
-                color=real_color,
+                color=color1,
                 linestyle="-",
                 linewidth=2.0,
                 alpha=0.3,
-                label="Real" if i == 0 else "",
             )
 
-    # Plot generated profiles
-    for i in range(n_profiles):
-        gen_seq = generated_sequences[i]
+    # Plot generated profiles (second subplot)
+    for idx in gen_indices_2:
+        gen_seq = generated_sequences[idx]
         if len(gen_seq) > 0:
             seq_with_origin = prepend_origin(gen_seq)
+            all_tts_values.extend(seq_with_origin[:, 0])
+            all_depth_values.extend(seq_with_origin[:, 1])
             ax2.plot(
                 seq_with_origin[:, 0],
                 seq_with_origin[:, 1],
-                color=gen_color,
-                linestyle="--",
+                color=color2,
+                linestyle="-",
                 linewidth=2.0,
                 alpha=0.3,
-                label="Generated" if i == 0 else "",
             )
+
+    # Plot generated profiles (third subplot) - different samples
+    for idx in gen_indices_3:
+        gen_seq = generated_sequences[idx]
+        if len(gen_seq) > 0:
+            seq_with_origin = prepend_origin(gen_seq)
+            all_tts_values.extend(seq_with_origin[:, 0])
+            all_depth_values.extend(seq_with_origin[:, 1])
+            ax3.plot(
+                seq_with_origin[:, 0],
+                seq_with_origin[:, 1],
+                color=color3,
+                linestyle="-",
+                linewidth=2.0,
+                alpha=0.3,
+            )
+
+    # Set consistent x-axis limits starting at 0
+    if len(all_tts_values) > 0:
+        max_tts = max(all_tts_values)
+        x_max = max_tts * 1.05  # Add 5% padding
+        ax1.set_xlim(0, x_max)
+        ax2.set_xlim(0, x_max)
+        ax3.set_xlim(0, x_max)
+
+    # Set consistent y-axis limits starting at 0
+    if len(all_depth_values) > 0:
+        max_depth = max(all_depth_values)
+        y_max = max_depth * 1.05  # Add 5% padding
+        ax1.set_ylim(0, y_max)
+        ax2.set_ylim(0, y_max)
+        ax3.set_ylim(0, y_max)
 
     ax1.set_xlabel("TTS (s)", fontsize=12)
     ax1.set_ylabel("Depth (m)", fontsize=12)
     ax1.grid(True, alpha=0.3)
+    ax1.invert_yaxis()
     # ax1.legend(fontsize=11)
 
     ax2.set_xlabel("TTS (s)", fontsize=12)
@@ -137,14 +211,20 @@ def plot_tts_vs_depth_comparison(
     ax2.invert_yaxis()
     # ax2.legend(fontsize=11)
 
+    ax3.set_xlabel("TTS (s)", fontsize=12)
+    ax3.set_ylabel("Depth (m)", fontsize=12)
+    ax3.grid(True, alpha=0.3)
+    ax3.invert_yaxis()
+    # ax3.legend(fontsize=11)
+
     # Move all xlabel and ticks to the top
     ax1.xaxis.set_label_position("top")
     ax1.xaxis.tick_top()
     ax2.xaxis.set_label_position("top")
     ax2.xaxis.tick_top()
-    plt.suptitle(
-        f"TTS vs Depth Comparison (n={n_profiles})", fontsize=14, fontweight="bold"
-    )
+    ax3.xaxis.set_label_position("top")
+    ax3.xaxis.tick_top()
+    plt.suptitle("TTS vs Depth Comparison", fontsize=14, fontweight="bold")
     plt.tight_layout()
     plt.savefig(output_path, dpi=150, bbox_inches="tight")
     plt.close()
@@ -167,14 +247,32 @@ def plot_vs_vs_depth_comparison(
     """
     n_profiles = min(n_profiles, len(real_sequences), len(generated_sequences))
 
-    # Get colorblind-friendly colors
+    # Get colorblind-friendly colors - use three different colors
     colors = sns.color_palette("colorblind")
-    real_color = colors[0]  # First color for real
-    gen_color = colors[1]  # Second color for generated
+    color1 = colors[0]
+    color2 = colors[1]
+    color3 = colors[2]
 
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 8), sharey=True)
+    # Sample different profiles for second and third subplots
+    np.random.seed(42)  # For reproducibility
+    n_gen = len(generated_sequences)
+    if n_gen >= 2 * n_profiles:
+        # Sample different profiles for second and third subplots
+        gen_indices_2 = np.random.choice(n_gen, n_profiles, replace=False)
+        remaining_indices = np.setdiff1d(np.arange(n_gen), gen_indices_2)
+        gen_indices_3 = np.random.choice(remaining_indices, n_profiles, replace=False)
+    else:
+        # If not enough profiles, sample with replacement but ensure different sets
+        gen_indices_2 = np.random.choice(n_gen, n_profiles, replace=True)
+        gen_indices_3 = np.random.choice(n_gen, n_profiles, replace=True)
 
-    # Plot real profiles
+    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(15, 8), sharey=True)
+
+    # Collect all Vs and depth values to determine axis limits
+    all_vs_values = []
+    all_depth_values = []
+
+    # Plot real profiles (first subplot)
     for i in range(n_profiles):
         real_seq = real_sequences[i]
         if len(real_seq) > 0:
@@ -193,19 +291,20 @@ def plot_vs_vs_depth_comparison(
                     step_depths.append(depths[j + 1])
                     step_vs.append(vs_values[j])
 
+                all_vs_values.extend(step_vs)
+                all_depth_values.extend(step_depths)
                 ax1.plot(
                     step_vs,
                     step_depths,
-                    color=real_color,
+                    color=color1,
                     linestyle="-",
                     linewidth=2.0,
                     alpha=0.3,
-                    label="Real" if i == 0 else "",
                 )
 
-    # Plot generated profiles
-    for i in range(n_profiles):
-        gen_seq = generated_sequences[i]
+    # Plot generated profiles (second subplot)
+    for idx in gen_indices_2:
+        gen_seq = generated_sequences[idx]
         if len(gen_seq) > 0:
             depths, vs_values = tts_depth_to_vs(gen_seq)
             if len(vs_values) > 0 and len(depths) > 1:
@@ -221,20 +320,67 @@ def plot_vs_vs_depth_comparison(
                     step_depths.append(depths[j + 1])
                     step_vs.append(vs_values[j])
 
+                all_vs_values.extend(step_vs)
+                all_depth_values.extend(step_depths)
                 ax2.plot(
                     step_vs,
                     step_depths,
-                    color=gen_color,
+                    color=color2,
                     linestyle="-",
                     linewidth=2.0,
                     alpha=0.3,
-                    label="Generated" if i == 0 else "",
                 )
+
+    # Plot generated profiles (third subplot) - different samples
+    for idx in gen_indices_3:
+        gen_seq = generated_sequences[idx]
+        if len(gen_seq) > 0:
+            depths, vs_values = tts_depth_to_vs(gen_seq)
+            if len(vs_values) > 0 and len(depths) > 1:
+                # Create step plot: Vs is constant within each layer
+                step_depths = []
+                step_vs = []
+
+                for j in range(len(vs_values)):
+                    # Start of layer
+                    step_depths.append(depths[j])
+                    step_vs.append(vs_values[j])
+                    # End of layer
+                    step_depths.append(depths[j + 1])
+                    step_vs.append(vs_values[j])
+
+                all_vs_values.extend(step_vs)
+                all_depth_values.extend(step_depths)
+                ax3.plot(
+                    step_vs,
+                    step_depths,
+                    color=color3,
+                    linestyle="-",
+                    linewidth=2.0,
+                    alpha=0.3,
+                )
+
+    # Set consistent x-axis limits starting at 0
+    if len(all_vs_values) > 0:
+        max_vs = max(all_vs_values)
+        x_max = max_vs * 1.05  # Add 5% padding
+        ax1.set_xlim(0, x_max)
+        ax2.set_xlim(0, x_max)
+        ax3.set_xlim(0, x_max)
+
+    # Set consistent y-axis limits starting at 0
+    if len(all_depth_values) > 0:
+        max_depth = max(all_depth_values)
+        y_max = max_depth * 1.05  # Add 5% padding
+        ax1.set_ylim(0, y_max)
+        ax2.set_ylim(0, y_max)
+        ax3.set_ylim(0, y_max)
 
     ax1.set_xlabel("Vs (m/s)", fontsize=12)
     ax1.set_ylabel("Depth (m)", fontsize=12)
 
     ax1.grid(True, alpha=0.3)
+    ax1.invert_yaxis()
     # ax1.legend(fontsize=11)
 
     ax2.set_xlabel("Vs (m/s)", fontsize=12)
@@ -244,15 +390,22 @@ def plot_vs_vs_depth_comparison(
     ax2.invert_yaxis()
     # ax2.legend(fontsize=11)
 
+    ax3.set_xlabel("Vs (m/s)", fontsize=12)
+    ax3.set_ylabel("Depth (m)", fontsize=12)
+
+    ax3.grid(True, alpha=0.3)
+    ax3.invert_yaxis()
+    # ax3.legend(fontsize=11)
+
     # Move all xlabel and ticks to the top
     ax1.xaxis.set_label_position("top")
     ax1.xaxis.tick_top()
     ax2.xaxis.set_label_position("top")
     ax2.xaxis.tick_top()
+    ax3.xaxis.set_label_position("top")
+    ax3.xaxis.tick_top()
 
-    plt.suptitle(
-        f"Vs vs Depth Comparison (n={n_profiles})", fontsize=14, fontweight="bold"
-    )
+    plt.suptitle("Vs vs Depth Comparison", fontsize=14, fontweight="bold")
 
     plt.tight_layout()
     plt.savefig(output_path, dpi=150, bbox_inches="tight")
@@ -274,8 +427,8 @@ def main():
     parser.add_argument(
         "--n-profiles",
         type=int,
-        default=20,
-        help="Number of profiles to compare (default: 20)",
+        default=30,
+        help="Number of profiles to compare (default: 30)",
     )
     parser.add_argument(
         "--output-dir",
@@ -326,6 +479,16 @@ def main():
 
     print(f"Loaded {len(generated_sequences)} generated profiles")
 
+    # Filter out sequences with Vs < 100 m/s
+    print("Filtering sequences with Vs < 100 m/s...")
+    generated_sequences_filtered = [
+        seq for seq in generated_sequences if has_valid_vs(seq, min_vs=100.0)
+    ]
+    print(
+        f"Filtered {len(generated_sequences)} -> {len(generated_sequences_filtered)} generated profiles"
+    )
+    generated_sequences = generated_sequences_filtered
+
     # Load real profiles from test set
     print("Loading real profiles from test set...")
     data_loader = FlowMatchingDataLoader(data_path=Path(cfg.data_path))
@@ -363,8 +526,20 @@ def main():
 
     print(f"Loaded {len(real_sequences)} real sequences from test set")
 
-    # Sample n_profiles from each
-    n_profiles = min(args.n_profiles, len(real_sequences), len(generated_sequences))
+    # Filter out sequences with Vs < 100 m/s
+    print("Filtering real sequences with Vs < 100 m/s...")
+    real_sequences_filtered = [
+        seq for seq in real_sequences if has_valid_vs(seq, min_vs=100.0)
+    ]
+    print(
+        f"Filtered {len(real_sequences)} -> {len(real_sequences_filtered)} real sequences"
+    )
+    real_sequences = real_sequences_filtered
+
+    # Sample n_profiles from each (ensure at least 30)
+    n_profiles = max(
+        30, min(args.n_profiles, len(real_sequences), len(generated_sequences))
+    )
     np.random.seed(24)  # For reproducibility
     real_indices = np.random.choice(len(real_sequences), n_profiles, replace=False)
     gen_indices = np.random.choice(len(generated_sequences), n_profiles, replace=False)
