@@ -109,6 +109,9 @@ This flagship model builds directly on the two flow matching feasibility studies
 5.  **Fetch/prepare data** (requires VSPDB credentials in `.env` for real profiles):
     ```bash
     python scripts/vspdb_request_data.py
+    python scripts/build_vspdb_tts.py          # Vs → raw two-way TTS (seconds, not log1p)
+    python experiments/flow_matching_simplified/breakpoint_analysis.py --data-path data/vspdb_tts_profiles.parquet
+    python experiments/flow_matching_simplified/depth_dependent_stats/precompute_statistics.py
     python scripts/extract_vs_pairs.py               # for the Vs-pairs feasibility experiment
     python scripts/generate_synthetic_profiles.py     # for the toy-profile feasibility experiment
     ```

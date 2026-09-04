@@ -315,11 +315,15 @@ if __name__ == "__main__":
             FlowMatchingDataset,
         )
         from experiments.flow_matching_simplified import config as cfg_mod
+        from experiments.flow_matching_simplified.split_utils import (
+            get_train_val_test_indices,
+        )
     except ImportError:
         # Fallback: try relative imports when running from the directory
         sys.path.insert(0, str(Path(__file__).parent.parent))
         from data import FlowMatchingDataLoader, FlowMatchingDataset  # type: ignore
         import config as cfg_mod  # type: ignore
+        from split_utils import get_train_val_test_indices  # type: ignore
 
     # Load dataset
     cfg = cfg_mod.cfg
@@ -329,12 +333,7 @@ if __name__ == "__main__":
     assert data_loader.sequences is not None, "Sequences must be loaded"
     n_total = len(data_loader.sequences)
 
-    # Create train/val/test splits
-    all_indices = torch.randperm(n_total)
-    n_train = int(cfg.train_val_test_split[0] * n_total)
-    n_val = int(cfg.train_val_test_split[1] * n_total)
-
-    train_indices = all_indices[:n_train].tolist()
+    train_indices, _, _ = get_train_val_test_indices(n_total)
     train_sequences = [data_loader.sequences[i] for i in train_indices]
 
     train_dataset = FlowMatchingDataset(

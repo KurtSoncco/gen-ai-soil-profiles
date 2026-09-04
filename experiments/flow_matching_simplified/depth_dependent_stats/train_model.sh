@@ -89,6 +89,12 @@ cd "$PROJECT_ROOT"
 # Export PYTHONPATH so Python can find the experiments module
 export PYTHONPATH="$PROJECT_ROOT:$PYTHONPATH"
 
+# Disable wandb when no API key is configured
+if [ -z "${WANDB_API_KEY:-}" ]; then
+    export WANDB_MODE="${WANDB_MODE:-disabled}"
+    echo "wandb disabled (WANDB_API_KEY not set)"
+fi
+
 # Check if target statistics files exist
 if [ ! -f "$TARGET_STATS" ]; then
     echo "Error: Target statistics file not found: $TARGET_STATS"

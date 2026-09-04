@@ -9,7 +9,6 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
-import numpy as np
 import torch
 
 
@@ -106,7 +105,7 @@ class Config:
         return os.path.join(self.output_dir, "samples")
 
     # Misc
-    seed: int = np.random.randint(0, 1000000)
+    seed: int = 42
 
 
 cfg = Config()

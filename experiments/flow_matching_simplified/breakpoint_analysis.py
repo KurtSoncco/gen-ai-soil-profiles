@@ -2,13 +2,18 @@
 #  Robust breakpoint detection using iterative linear fitting.
 
 
-import os
+import argparse
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+DEFAULT_TTS_PATH = PROJECT_ROOT / "data" / "vspdb_tts_profiles.parquet"
+DEFAULT_BREAKPOINTS_PATH = Path(__file__).resolve().parent / "data" / "breakpoints.parquet"
+README_FIGURE_DIR = PROJECT_ROOT / "outputs" / "figures" / "flow_matching"
 
 
 def load_data(file_path: Path) -> dict[str, pd.DataFrame]:
@@ -120,14 +125,22 @@ def extract_breakpoints(
 
 
 def plot_breakpoints(
-    profiles_dict: dict[str, pd.DataFrame], num_profiles: int = 10
+    profiles_dict: dict[str, pd.DataFrame],
+    num_profiles: int = 10,
+    output_paths: list[Path] | None = None,
+    seed: int = 42,
 ) -> None:
     """Plot original vs reconstructed for visual inspection.
 
     Args:
         profiles_dict: Dictionary mapping profile IDs to DataFrames with 'depth' and 'tts' columns
         num_profiles: Number of random profiles to plot
+        output_paths: Figure destinations. Defaults to the experiment figure dir
+            and the README path ``outputs/figures/flow_matching/breakpoints.png``.
+        seed: RNG seed for profile selection.
     """
+
+    rng = np.random.default_rng(seed)
 
     # Get all profile IDs
     profile_ids = np.array(list(profiles_dict.keys()))
@@ -135,7 +148,7 @@ def plot_breakpoints(
     # Select random profiles
     if len(profile_ids) < num_profiles:
         num_profiles = len(profile_ids)
-    selected_ids = np.random.choice(profile_ids, num_profiles, replace=False)
+    selected_ids = rng.choice(profile_ids, num_profiles, replace=False)
 
     # Select colors from seabron colorblind palette
     colors = sns.color_palette("colorblind", num_profiles)
@@ -177,21 +190,57 @@ def plot_breakpoints(
     plt.gca().xaxis.tick_top()
     plt.gca().invert_yaxis()
 
-    # Ensure output directory exists
-    output_dir = Path(__file__).parent / "outputs" / "figures"
-    output_dir.mkdir(parents=True, exist_ok=True)
+    if output_paths is None:
+        output_paths = [
+            Path(__file__).parent / "outputs" / "figures" / "breakpoints.png",
+            README_FIGURE_DIR / "breakpoints.png",
+        ]
 
-    plt.savefig(output_dir / "breakpoints.png", dpi=300)
+    for path in output_paths:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        plt.savefig(path, dpi=300)
+        print(f"Saved breakpoint overlay to {path}")
     plt.close()
 
 
-if __name__ == "__main__":
-    os.chdir(Path(__file__).parent)
-    original_data_path = (
-        Path(__file__).parent.parent.parent / "data" / "japan_borehole_profiles.parquet"
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Extract piecewise-linear breakpoints from VSPDB TTS profiles"
     )
+    parser.add_argument(
+        "--data-path",
+        type=Path,
+        default=DEFAULT_TTS_PATH,
+        help="TTS parquet with columns velocity_metadata_id, depth, tts "
+        "(default: data/vspdb_tts_profiles.parquet)",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=DEFAULT_BREAKPOINTS_PATH,
+        help="Destination breakpoint parquet (default: experiments/flow_matching_simplified/data/breakpoints.parquet)",
+    )
+    parser.add_argument(
+        "--num-plot-profiles",
+        type=int,
+        default=10,
+        help="Number of random profiles to overlay in the breakpoint figure",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="RNG seed for overlay profile selection",
+    )
+    args = parser.parse_args()
 
-    original_data = load_data(original_data_path)
+    if not args.data_path.exists():
+        raise FileNotFoundError(
+            f"TTS parquet not found: {args.data_path}. "
+            "Run scripts/vspdb_request_data.py then scripts/build_vspdb_tts.py first."
+        )
+
+    original_data = load_data(args.data_path)
 
     print(f"Number of different profiles: {len(original_data)}")
 
@@ -200,34 +249,36 @@ if __name__ == "__main__":
         for profile_id, profile in original_data.items()
     }
 
+    lengths = [len(breakpoints[profile_id]) for profile_id in breakpoints]
     print(f"Number of profiles with breakpoints: {len(breakpoints)}")
+    print(f" Average number of breakpoints per profile: {np.mean(lengths)}")
+    print(f" Std number of breakpoints per profile: {np.std(lengths)}")
+    print(f" Min number of breakpoints per profile: {np.min(lengths)}")
+    print(f" Max number of breakpoints per profile: {np.max(lengths)}")
     print(
-        f" Average number of breakpoints per profile: {np.mean([len(breakpoints[profile_id]) for profile_id in breakpoints.keys()])}"
+        f" Number of profiles with no breakpoints: {sum(n == 0 for n in lengths)}"
     )
     print(
-        f" Std number of breakpoints per profile: {np.std([len(breakpoints[profile_id]) for profile_id in breakpoints.keys()])}"
+        f" Number of profiles with one breakpoint: {sum(n == 1 for n in lengths)}"
     )
     print(
-        f" Min number of breakpoints per profile: {np.min([len(breakpoints[profile_id]) for profile_id in breakpoints.keys()])}"
+        f" Number of profiles with two breakpoints: {sum(n == 2 for n in lengths)}"
     )
     print(
-        f" Max number of breakpoints per profile: {np.max([len(breakpoints[profile_id]) for profile_id in breakpoints.keys()])}"
-    )
-    print(
-        f" Number of profiles with no breakpoints: {len([profile_id for profile_id in breakpoints.keys() if len(breakpoints[profile_id]) == 0])}"
-    )
-    print(
-        f" Number of profiles with one breakpoint: {len([profile_id for profile_id in breakpoints.keys() if len(breakpoints[profile_id]) == 1])}"
-    )
-    print(
-        f" Number of profiles with two breakpoints: {len([profile_id for profile_id in breakpoints.keys() if len(breakpoints[profile_id]) == 2])}"
-    )
-    print(
-        f" Number of profiles with three breakpoints: {len([profile_id for profile_id in breakpoints.keys() if len(breakpoints[profile_id]) == 3])}"
+        f" Number of profiles with three breakpoints: {sum(n == 3 for n in lengths)}"
     )
 
-    # Save breakpoint data to parquet
-    # Convert dictionary of arrays to long-format DataFrame
+    all_tts = np.concatenate(
+        [df["tts"].to_numpy() for df in original_data.values() if len(df)]
+    )
+    print(
+        f" TTS range (seconds): [{float(all_tts.min()):.6f}, {float(all_tts.max()):.6f}]"
+    )
+    if float(all_tts.max()) < 0.5:
+        print(
+            " WARNING: TTS max < 0.5 s; source parquet may still be log1p rather than raw seconds."
+        )
+
     breakpoints_list = []
     for profile_id, breakpoint_array in breakpoints.items():
         if len(breakpoint_array) > 0:
@@ -241,11 +292,16 @@ if __name__ == "__main__":
                 )
 
     breakpoints_df = pd.DataFrame(breakpoints_list)
-    os.makedirs(Path(__file__).parent / "data", exist_ok=True)
-    breakpoints_df.to_parquet(
-        Path(__file__).parent / "data" / "breakpoints.parquet",
-        index=False,
-    )
-    print(f"Breakpoints saved to {Path(__file__).parent / 'breakpoints.parquet'}")
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    breakpoints_df.to_parquet(args.output, index=False)
+    print(f"Breakpoints saved to {args.output}")
 
-    plot_breakpoints(original_data, 10)
+    plot_breakpoints(
+        original_data,
+        args.num_plot_profiles,
+        seed=args.seed,
+    )
+
+
+if __name__ == "__main__":
+    main()
