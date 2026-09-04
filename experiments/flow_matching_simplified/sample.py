@@ -22,6 +22,7 @@ except ImportError:
 from experiments.flow_matching_simplified import config as cfg_mod
 from experiments.flow_matching_simplified.data import FlowMatchingDataLoader
 from experiments.flow_matching_simplified.model import TransformerModel
+from experiments.flow_matching_simplified.split_utils import get_train_val_test_indices
 from experiments.flow_matching_simplified.train import sample_sequences
 from experiments.flow_matching_simplified.utils import compute_sequence_statistics
 
@@ -141,6 +142,10 @@ def main() -> None:
     if not os.path.exists(checkpoint_path):
         raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
 
+    # Load model first so the wandb name can include the checkpoint epoch
+    print(f"Loading model from {checkpoint_path}")
+    model, epoch = load_checkpoint(checkpoint_path, device, cfg)
+
     # Initialize wandb if project provided
     wandb_run = None
     if args.wandb_project and wandb is not None:
@@ -152,10 +157,6 @@ def main() -> None:
         )
         print("[info] wandb initialized for sampling")
 
-    # Load model
-    print(f"Loading model from {checkpoint_path}")
-    model, epoch = load_checkpoint(checkpoint_path, device, cfg)
-
     # Load training dataset for sequence statistics
     print("Loading training data for sequence statistics...")
     data_loader = FlowMatchingDataLoader(data_path=Path(cfg.data_path))
@@ -164,17 +165,14 @@ def main() -> None:
     assert data_loader.sequences is not None
     n_total = len(data_loader.sequences)
 
-    # Create train split (same as training)
-    all_indices = torch.randperm(n_total)
-    n_train = int(cfg.train_val_test_split[0] * n_total)
-    train_indices = all_indices[:n_train].tolist()
+    train_indices, val_indices, _ = get_train_val_test_indices(n_total)
 
     # Get training dataset
     train_dataset, _ = data_loader.get_dataset(
         max_length=cfg.max_length,
         normalize=cfg.normalize,
         train_indices=train_indices,
-        val_indices=all_indices[n_train : n_train + 1].tolist(),  # Dummy val
+        val_indices=val_indices,
     )
 
     # Generate samples

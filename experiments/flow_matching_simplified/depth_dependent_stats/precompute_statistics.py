@@ -10,7 +10,6 @@ import sys
 from pathlib import Path
 
 import numpy as np
-import torch
 
 # Add project root to path
 project_root = Path(__file__).parent.parent.parent.parent
@@ -28,6 +27,9 @@ try:
         plot_depth_statistics,
         plot_vertical_correlations,
     )
+    from experiments.flow_matching_simplified.split_utils import (
+        get_train_val_test_indices,
+    )
 except ImportError:
     # Fallback: try relative imports when running from the directory
     sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -38,6 +40,7 @@ except ImportError:
         plot_depth_statistics,
         plot_vertical_correlations,
     )
+    from split_utils import get_train_val_test_indices  # type: ignore
 
     from data import FlowMatchingDataLoader, FlowMatchingDataset  # type: ignore
 
@@ -78,6 +81,11 @@ def main():
         default=None,
         help="Path to data parquet file (default: from config)",
     )
+    parser.add_argument(
+        "--skip-readme-figures",
+        action="store_true",
+        help="Do not copy baseline plots to outputs/figures/flow_matching/",
+    )
 
     args = parser.parse_args()
 
@@ -113,12 +121,9 @@ def main():
     n_total = len(data_loader.sequences)
     print(f"Loaded {n_total} profiles")
 
-    # Create train/val/test splits (same as training)
+    # Create train/val/test splits (same as training; persisted to disk)
     print("Creating train/val/test splits...")
-    all_indices = torch.randperm(n_total)
-    n_train = int(cfg.train_val_test_split[0] * n_total)
-
-    train_indices = all_indices[:n_train].tolist()
+    train_indices, _, _ = get_train_val_test_indices(n_total)
 
     train_sequences = [data_loader.sequences[i] for i in train_indices]
     print(f"Training set: {len(train_sequences)} profiles")
@@ -198,6 +203,16 @@ def main():
     corr_plot_path = output_dir / "correlations_initial.png"
     plot_vertical_correlations(real_corrs, real_corrs, str(corr_plot_path))
     print(f"Saved correlation plot to: {corr_plot_path}")
+
+    if not args.skip_readme_figures:
+        readme_fig_dir = project_root / "outputs" / "figures" / "flow_matching"
+        readme_fig_dir.mkdir(parents=True, exist_ok=True)
+        readme_depth_path = readme_fig_dir / "depth_stats.png"
+        plot_depth_statistics(real_stats, real_stats, str(readme_depth_path))
+        print(f"Saved README depth statistics plot to: {readme_depth_path}")
+        readme_corr_path = readme_fig_dir / "vertical_correlations.png"
+        plot_vertical_correlations(real_corrs, real_corrs, str(readme_corr_path))
+        print(f"Saved README correlation plot to: {readme_corr_path}")
 
     print("\n" + "=" * 80)
     print("Done!")

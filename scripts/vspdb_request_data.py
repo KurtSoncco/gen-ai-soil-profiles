@@ -25,7 +25,8 @@ class VSPDBClient:
             raise ValueError("VSPDB API credentials not found in the .env file.")
 
         self.token: Optional[str] = None
-        self.base_url: str = "https://www.vspdb.org/vsLayerData"
+        self.base_url: str = "https://vspdb.org/vsLayerData"
+        self.login_url: str = "https://vspdb.org/users/login"
         self.user_agent: str = (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
             "(KHTML, like Gecko) 134.0.6998.118 Safari/537.36"
@@ -33,7 +34,7 @@ class VSPDBClient:
 
     def authenticate(self) -> bool:
         """Authenticates with the API and stores the token."""
-        url = "http://www.vspdb.org/users/login"
+        url = self.login_url
         headers = {
             "User-Agent": self.user_agent,
             "Accept": "application/json",

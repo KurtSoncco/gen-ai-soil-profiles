@@ -35,9 +35,11 @@ def load_latest_checkpoint(dir_path: str) -> str:
         raise FileNotFoundError(f"No checkpoints found in {dir_path}")
 
     files.sort(
-        key=lambda x: int(x.split("_")[-1].split(".")[0])
-        if x != "checkpoint_final.pt"
-        else float("inf")
+        key=lambda x: (
+            int(x.split("_")[-1].split(".")[0])
+            if x != "checkpoint_final.pt"
+            else float("inf")
+        )
     )
     return os.path.join(dir_path, files[-1])
 

@@ -23,9 +23,13 @@ try:
         FlowMatchingDataLoader,
         FlowMatchingDataset,
     )
+    from experiments.flow_matching_simplified.split_utils import (
+        get_train_val_test_indices,
+    )
 except ImportError:
     sys.path.insert(0, str(Path(__file__).parent.parent))
     import config as cfg_mod  # type: ignore
+    from split_utils import get_train_val_test_indices  # type: ignore
 
     from data import FlowMatchingDataLoader, FlowMatchingDataset  # type: ignore
 
@@ -235,14 +239,7 @@ def load_real_sequences(cfg) -> List[np.ndarray]:
     assert data_loader.sequences is not None, "Sequences must be loaded"
     n_total = len(data_loader.sequences)
 
-    # Create train/val/test splits
-    import torch
-
-    all_indices = torch.randperm(n_total)
-    n_train = int(cfg.train_val_test_split[0] * n_total)
-    n_val = int(cfg.train_val_test_split[1] * n_total)
-
-    test_indices = all_indices[n_train + n_val :].tolist()
+    _, _, test_indices = get_train_val_test_indices(n_total)
 
     # Get test dataset
     assert data_loader.sequences is not None

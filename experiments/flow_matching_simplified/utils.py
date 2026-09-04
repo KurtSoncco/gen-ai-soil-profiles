@@ -371,9 +371,7 @@ def compute_vs_penalty(
 
             # Mean penalty per violation (dimensionless)
             batch_penalty = (
-                vs_penalty_low.mean()
-                + vs_penalty_high.mean()
-                + dt_penalty.mean()
+                vs_penalty_low.mean() + vs_penalty_high.mean() + dt_penalty.mean()
             )
             all_penalties.append(batch_penalty)
 

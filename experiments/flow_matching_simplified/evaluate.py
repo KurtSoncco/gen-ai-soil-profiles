@@ -26,11 +26,15 @@ try:
         FlowMatchingDataset,
     )
     from experiments.flow_matching_simplified.model import TransformerModel
+    from experiments.flow_matching_simplified.split_utils import (
+        get_train_val_test_indices,
+    )
     from experiments.flow_matching_simplified.train import evaluate_model
     from experiments.flow_matching_simplified.utils import compute_sequence_statistics
 except ImportError:  # fallback when running as script
     import config as cfg_mod  # type: ignore
     from model import TransformerModel  # type: ignore
+    from split_utils import get_train_val_test_indices  # type: ignore
     from train import evaluate_model  # type: ignore
     from utils import compute_sequence_statistics  # type: ignore
 
@@ -161,14 +165,7 @@ def main() -> None:
     assert data_loader.sequences is not None
     n_total = len(data_loader.sequences)
 
-    # Create splits (same as training)
-    all_indices = torch.randperm(n_total)
-    n_train = int(cfg.train_val_test_split[0] * n_total)
-    n_val = int(cfg.train_val_test_split[1] * n_total)
-
-    train_indices = all_indices[:n_train].tolist()
-    val_indices = all_indices[n_train : n_train + n_val].tolist()
-    test_indices = all_indices[n_train + n_val :].tolist()
+    train_indices, val_indices, test_indices = get_train_val_test_indices(n_total)
 
     # Get datasets
     datasets = data_loader.get_dataset(

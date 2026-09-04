@@ -12,6 +12,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import pytest
 
 # Add project root to path
 project_root = Path(__file__).parent.parent.parent
@@ -20,14 +21,26 @@ sys.path.insert(0, str(project_root))
 from experiments.synthetic_toy_profiles_flow_matching import config, data  # noqa: E402
 
 
-def test_data_loading():
+@pytest.fixture(scope="module")
+def dataset():
+    """Load the synthetic toy dataset, or skip when the gitignored parquet is absent."""
+    parquet_path = Path(config.cfg.parquet_path)
+    if not parquet_path.exists():
+        pytest.skip(
+            f"Missing {parquet_path}; run scripts/generate_synthetic_profiles.py"
+        )
+    _, _, ds = data.create_dataloader(batch_size=4, num_workers=0, shuffle=False)
+    return ds
+
+
+def test_data_loading(dataset):
     """Test basic data loading."""
     print("=" * 80)
     print("Testing Data Loading")
     print("=" * 80)
 
     # Create dataloader
-    loader, max_length, dataset = data.create_dataloader(
+    loader, max_length, _ = data.create_dataloader(
         batch_size=4, num_workers=0, shuffle=False
     )
 
@@ -42,8 +55,6 @@ def test_data_loading():
     print(f"  Batch shape: {batch.shape}")
     print(f"  Batch dtype: {batch.dtype}")
     print(f"  Batch range: [{batch.min().item():.3f}, {batch.max().item():.3f}]")
-
-    return dataset, max_length
 
 
 def test_normalization(dataset):
@@ -213,7 +224,13 @@ def main():
     print("SYNTHETIC TOY PROFILES DATA TEST")
     print("=" * 80)
 
-    dataset, max_length = test_data_loading()
+    parquet_path = Path(config.cfg.parquet_path)
+    if not parquet_path.exists():
+        raise FileNotFoundError(
+            f"Missing {parquet_path}; run scripts/generate_synthetic_profiles.py"
+        )
+    _, _, dataset = data.create_dataloader(batch_size=4, num_workers=0, shuffle=False)
+    test_data_loading(dataset)
     test_normalization(dataset)
     test_profile_structure(dataset)
     test_plotting(dataset)

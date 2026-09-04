@@ -195,18 +195,18 @@ class FlowMatchingDataLoader:
 
             # Convert to [ts, depth] pairs
             sequence = np.column_stack([ts_values, depths]).astype(np.float32)
-            
+
             # Remove (0,0) origin point if present - it's deterministic and shouldn't be learned
             # The (0,0) point is a fixed boundary condition, not part of the learned distribution.
             # It will be prepended back during evaluation/visualization for reconstruction.
             # Keep only breakpoints with depth > 0 or TTS > 0
             mask = (sequence[:, 1] > 0) | (sequence[:, 0] > 0)  # depth > 0 OR ts > 0
             sequence = sequence[mask]
-            
+
             # Skip if sequence becomes empty after removing origin
             if len(sequence) == 0:
                 continue
-            
+
             self.sequences.append(sequence)
             self.profile_ids.append(str(profile_id))
 
@@ -355,14 +355,14 @@ if __name__ == "__main__":
 
     # Separate into training, validation and test sets
     n_total = len(data_loader.sequences)
-    all_indices = torch.randperm(n_total)
+    try:
+        from experiments.flow_matching_simplified.split_utils import (
+            get_train_val_test_indices,
+        )
+    except ImportError:
+        from split_utils import get_train_val_test_indices  # type: ignore
 
-    n_train = int(0.8 * n_total)
-    n_val = int(0.1 * n_total)
-
-    train_indices = all_indices[:n_train].tolist()
-    val_indices = all_indices[n_train : n_train + n_val].tolist()
-    test_indices = all_indices[n_train + n_val :].tolist()
+    train_indices, val_indices, test_indices = get_train_val_test_indices(n_total)
 
     datasets = data_loader.get_dataset(
         train_indices=train_indices, val_indices=val_indices

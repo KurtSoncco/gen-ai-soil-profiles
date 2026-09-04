@@ -47,10 +47,14 @@ try:
         FlowMatchingDataset,
     )
     from experiments.flow_matching_simplified.model import TransformerModel
+    from experiments.flow_matching_simplified.split_utils import (
+        get_train_val_test_indices,
+    )
     from experiments.flow_matching_simplified.utils import compute_vs_penalty
 except ImportError:  # fallback when running as script
     import config as cfg_mod
     from model import TransformerModel  # type: ignore
+    from split_utils import get_train_val_test_indices  # type: ignore
     from utils import compute_vs_penalty  # type: ignore
 
     from data import FlowMatchingDataLoader, FlowMatchingDataset  # type: ignore
@@ -528,9 +532,9 @@ def main() -> None:
     os.makedirs(cfg.results_dir, exist_ok=True)
     os.makedirs(cfg.samples_dir, exist_ok=True)
 
-    # Initialize wandb
+    # Initialize wandb only when an API key is present
     try:
-        if wandb is not None:
+        if wandb is not None and os.environ.get("WANDB_API_KEY"):
             wandb_name = cfg.wandb_name or f"flow_matching_breakpoints_{cfg.seed}"
             wandb_run = wandb.init(
                 project=cfg.wandb_project,
@@ -539,7 +543,7 @@ def main() -> None:
             )
             print("[info] wandb initialized")
         else:
-            print("[info] wandb not available, continuing without it")
+            print("[info] wandb disabled (no WANDB_API_KEY)")
     except Exception as e:
         print(f"[warning] wandb initialization failed: {e}")
         wandb_run = None
@@ -555,14 +559,7 @@ def main() -> None:
     assert data_loader.sequences is not None, "Sequences must be loaded"
     n_total = len(data_loader.sequences)
 
-    # Create train/val/test splits
-    all_indices = torch.randperm(n_total)
-    n_train = int(cfg.train_val_test_split[0] * n_total)
-    n_val = int(cfg.train_val_test_split[1] * n_total)
-
-    train_indices = all_indices[:n_train].tolist()
-    val_indices = all_indices[n_train : n_train + n_val].tolist()
-    test_indices = all_indices[n_train + n_val :].tolist()
+    train_indices, val_indices, test_indices = get_train_val_test_indices(n_total)
 
     print(
         f"Train: {len(train_indices)}, Val: {len(val_indices)}, Test: {len(test_indices)}"
