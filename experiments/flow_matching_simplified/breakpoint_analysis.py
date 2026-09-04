@@ -265,12 +265,19 @@ def main() -> None:
     all_tts = np.concatenate(
         [df["tts"].to_numpy() for df in original_data.values() if len(df)]
     )
+    all_depth = np.concatenate(
+        [df["depth"].to_numpy() for df in original_data.values() if len(df)]
+    )
     print(
         f" TTS range (seconds): [{float(all_tts.min()):.6f}, {float(all_tts.max()):.6f}]"
     )
-    if float(all_tts.max()) < 0.5:
+    print(
+        f" Depth range (m): [{float(all_depth.min()):.1f}, {float(all_depth.max()):.1f}]"
+    )
+    if float(all_tts.max()) < 0.5 and float(all_depth.max()) > 100:
         print(
-            " WARNING: TTS max < 0.5 s; source parquet may still be log1p rather than raw seconds."
+            " WARNING: TTS max < 0.5 s at depths > 100 m; "
+            "source parquet may still be log1p rather than raw seconds."
         )
 
     breakpoints_list = []

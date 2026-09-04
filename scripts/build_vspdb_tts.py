@@ -87,15 +87,18 @@ def build_tts_profiles(
 
     n_profiles = int(out["velocity_metadata_id"].nunique())
     tts = out["tts"]
+    max_depth = float(out["depth"].max())
     print(f"Wrote {len(out)} rows / {n_profiles} profiles to {output_path}")
     print(f"  skipped profiles: {skipped}")
     print(f"  TTS range: [{float(tts.min()):.6f}, {float(tts.max()):.6f}] s")
     print(f"  TTS mean: {float(tts.mean()):.6f} s")
+    print(f"  depth range: [0, {max_depth:.1f}] m")
     if float(tts.max()) > 50:
         print("  WARNING: TTS max > 50 s; values may not be in seconds.")
-    if float(tts.max()) < 0.5 and len(out) > 100:
+    if float(tts.max()) < 0.5 and max_depth > 100:
         print(
-            "  WARNING: TTS max < 0.5 s; values may be log1p rather than raw seconds."
+            "  WARNING: TTS max < 0.5 s at depths > 100 m; "
+            "values may be log1p rather than raw seconds."
         )
     return out
 
