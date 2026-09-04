@@ -27,7 +27,9 @@ try:
         plot_depth_statistics,
         plot_vertical_correlations,
     )
-    from experiments.flow_matching_simplified.split_utils import get_train_val_test_indices
+    from experiments.flow_matching_simplified.split_utils import (
+        get_train_val_test_indices,
+    )
 except ImportError:
     # Fallback: try relative imports when running from the directory
     sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -78,6 +80,11 @@ def main():
         type=str,
         default=None,
         help="Path to data parquet file (default: from config)",
+    )
+    parser.add_argument(
+        "--skip-readme-figures",
+        action="store_true",
+        help="Do not copy baseline plots to outputs/figures/flow_matching/",
     )
 
     args = parser.parse_args()
@@ -191,21 +198,21 @@ def main():
     plot_depth_statistics(real_stats, real_stats, str(depth_plot_path))
     print(f"Saved depth statistics plot to: {depth_plot_path}")
 
-    readme_fig_dir = project_root / "outputs" / "figures" / "flow_matching"
-    readme_fig_dir.mkdir(parents=True, exist_ok=True)
-    readme_depth_path = readme_fig_dir / "depth_stats.png"
-    plot_depth_statistics(real_stats, real_stats, str(readme_depth_path))
-    print(f"Saved README depth statistics plot to: {readme_depth_path}")
-
     # Plot correlations (baseline: real data only, no comparison)
     # Passing same data twice triggers baseline mode, showing only "Real Data" label
     corr_plot_path = output_dir / "correlations_initial.png"
     plot_vertical_correlations(real_corrs, real_corrs, str(corr_plot_path))
     print(f"Saved correlation plot to: {corr_plot_path}")
 
-    readme_corr_path = readme_fig_dir / "vertical_correlations.png"
-    plot_vertical_correlations(real_corrs, real_corrs, str(readme_corr_path))
-    print(f"Saved README correlation plot to: {readme_corr_path}")
+    if not args.skip_readme_figures:
+        readme_fig_dir = project_root / "outputs" / "figures" / "flow_matching"
+        readme_fig_dir.mkdir(parents=True, exist_ok=True)
+        readme_depth_path = readme_fig_dir / "depth_stats.png"
+        plot_depth_statistics(real_stats, real_stats, str(readme_depth_path))
+        print(f"Saved README depth statistics plot to: {readme_depth_path}")
+        readme_corr_path = readme_fig_dir / "vertical_correlations.png"
+        plot_vertical_correlations(real_corrs, real_corrs, str(readme_corr_path))
+        print(f"Saved README correlation plot to: {readme_corr_path}")
 
     print("\n" + "=" * 80)
     print("Done!")

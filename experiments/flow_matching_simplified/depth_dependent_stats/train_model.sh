@@ -23,6 +23,8 @@ TARGET_CORR="$DEPTH_STATS_DIR/real_correlations.pkl"
 DEPTH_STATS_WEIGHT=""
 VERTICAL_CORR_WEIGHT=""
 RESUME_CHECKPOINT=""
+NUM_EPOCHS=""
+DEVICE=""
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -47,6 +49,14 @@ while [[ $# -gt 0 ]]; do
             RESUME_CHECKPOINT="$2"
             shift 2
             ;;
+        --num-epochs)
+            NUM_EPOCHS="$2"
+            shift 2
+            ;;
+        --device)
+            DEVICE="$2"
+            shift 2
+            ;;
         --help|-h)
             echo "Usage: $0 [OPTIONS]"
             echo ""
@@ -59,8 +69,13 @@ while [[ $# -gt 0 ]]; do
             echo "                             (default: $DEPTH_STATS_DIR/real_correlations.pkl)"
             echo "  --depth-stats-weight FLOAT Weight for depth statistics loss (overrides config)"
             echo "  --vertical-corr-weight FLOAT Weight for vertical correlation loss (overrides config)"
+            echo "  --num-epochs INT           Override number of epochs (default: 1000)"
+            echo "  --device DEVICE            Override device (cuda or cpu)"
             echo "  --resume PATH              Resume training from checkpoint"
             echo "  --help, -h                 Show this help message"
+            echo ""
+            echo "The 1000-epoch flagship run requires a CUDA GPU (Lambda or Savio)."
+            echo "Set FORCE_CPU_TRAIN=1 to override that check."
             echo ""
             echo "Examples:"
             echo "  # Train with default settings"
@@ -93,6 +108,24 @@ export PYTHONPATH="$PROJECT_ROOT:$PYTHONPATH"
 if [ -z "${WANDB_API_KEY:-}" ]; then
     export WANDB_MODE="${WANDB_MODE:-disabled}"
     echo "wandb disabled (WANDB_API_KEY not set)"
+fi
+
+# Flagship 1000-epoch run expects a GPU. Override with FORCE_CPU_TRAIN=1.
+if [ "${FORCE_CPU_TRAIN:-}" != "1" ] && [ "${DEVICE:-}" != "cpu" ]; then
+    if ! python - <<'PY'
+import sys
+try:
+    import torch
+except ImportError:
+    sys.exit(1)
+sys.exit(0 if torch.cuda.is_available() else 1)
+PY
+    then
+        echo "Error: no CUDA GPU detected."
+        echo "The flagship 1000-epoch depth-aware run should be launched on Lambda or Savio."
+        echo "Start a GPU worker (cursor worker start) or set FORCE_CPU_TRAIN=1 to override."
+        exit 1
+    fi
 fi
 
 # Check if target statistics files exist
@@ -128,6 +161,14 @@ fi
 
 if [ -n "$VERTICAL_CORR_WEIGHT" ]; then
     TRAIN_ARGS+=(--vertical-corr-weight "$VERTICAL_CORR_WEIGHT")
+fi
+
+if [ -n "$NUM_EPOCHS" ]; then
+    TRAIN_ARGS+=(--num-epochs "$NUM_EPOCHS")
+fi
+
+if [ -n "$DEVICE" ]; then
+    TRAIN_ARGS+=(--device "$DEVICE")
 fi
 
 # Display configuration

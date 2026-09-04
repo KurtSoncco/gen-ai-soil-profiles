@@ -68,9 +68,7 @@ def get_train_val_test_indices(
         if saved_n == n_total:
             print(f"[info] Loaded train/val/test split from {path}")
             return train_indices, val_indices, test_indices
-        print(
-            f"[warning] Saved split n_total={saved_n} != {n_total}; recreating split"
-        )
+        print(f"[warning] Saved split n_total={saved_n} != {n_total}; recreating split")
 
     if not create:
         raise FileNotFoundError(
@@ -98,5 +96,7 @@ def get_train_val_test_indices(
     }
     with open(path, "w") as handle:
         json.dump(payload, handle)
-    print(f"[info] Saved train/val/test split ({n_train}/{n_val}/{len(test_indices)}) to {path}")
+    print(
+        f"[info] Saved train/val/test split ({n_train}/{n_val}/{len(test_indices)}) to {path}"
+    )
     return train_indices, val_indices, test_indices

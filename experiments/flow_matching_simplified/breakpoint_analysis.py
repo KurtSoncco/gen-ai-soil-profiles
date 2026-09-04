@@ -12,7 +12,9 @@ import seaborn as sns
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 DEFAULT_TTS_PATH = PROJECT_ROOT / "data" / "vspdb_tts_profiles.parquet"
-DEFAULT_BREAKPOINTS_PATH = Path(__file__).resolve().parent / "data" / "breakpoints.parquet"
+DEFAULT_BREAKPOINTS_PATH = (
+    Path(__file__).resolve().parent / "data" / "breakpoints.parquet"
+)
 README_FIGURE_DIR = PROJECT_ROOT / "outputs" / "figures" / "flow_matching"
 
 
@@ -255,18 +257,10 @@ def main() -> None:
     print(f" Std number of breakpoints per profile: {np.std(lengths)}")
     print(f" Min number of breakpoints per profile: {np.min(lengths)}")
     print(f" Max number of breakpoints per profile: {np.max(lengths)}")
-    print(
-        f" Number of profiles with no breakpoints: {sum(n == 0 for n in lengths)}"
-    )
-    print(
-        f" Number of profiles with one breakpoint: {sum(n == 1 for n in lengths)}"
-    )
-    print(
-        f" Number of profiles with two breakpoints: {sum(n == 2 for n in lengths)}"
-    )
-    print(
-        f" Number of profiles with three breakpoints: {sum(n == 3 for n in lengths)}"
-    )
+    print(f" Number of profiles with no breakpoints: {sum(n == 0 for n in lengths)}")
+    print(f" Number of profiles with one breakpoint: {sum(n == 1 for n in lengths)}")
+    print(f" Number of profiles with two breakpoints: {sum(n == 2 for n in lengths)}")
+    print(f" Number of profiles with three breakpoints: {sum(n == 3 for n in lengths)}")
 
     all_tts = np.concatenate(
         [df["tts"].to_numpy() for df in original_data.values() if len(df)]

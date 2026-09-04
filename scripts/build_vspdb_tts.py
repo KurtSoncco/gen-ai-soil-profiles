@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Convert VSPDB Vs profiles to raw two-way travel time (TTS).
 
 Reads ``data/vspdb_vs_profiles.parquet`` (columns: velocity_metadata_id, depth,
@@ -20,8 +19,8 @@ import pandas as pd
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from soilgen_ai.tts_profiles.check import TTSProfileProcessor  # noqa: E402
-from soilgen_ai.vs_profiles.vs_calculation import compute_tts  # noqa: E402
+from soilgen_ai.tts_profiles.check import TTSProfileProcessor
+from soilgen_ai.vs_profiles.vs_calculation import compute_tts
 
 
 def build_tts_profiles(
