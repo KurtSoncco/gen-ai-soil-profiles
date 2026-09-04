@@ -42,9 +42,9 @@ You can modify these in `config_extensions.py` or override via command line:
 ```python
 # In config_extensions.py DepthStatsConfig:
 vertical_corr_weight: float = 0.025  # Increase to 0.03-0.05 if needed
-short_lag_weight: float = 2.0        # Increase to 3.0 for stronger short-lag focus
-mean_weight_ratio: float = 2.0       # Increase to 3.0 for stronger mean emphasis
-min_bin_count: int = 50              # Increase to 100 for stricter filtering
+short_lag_weight: float = 2.0  # Increase to 3.0 for stronger short-lag focus
+mean_weight_ratio: float = 2.0  # Increase to 3.0 for stronger mean emphasis
+min_bin_count: int = 50  # Increase to 100 for stricter filtering
 ```
 
 ## Expected Improvements

@@ -93,11 +93,11 @@ python evaluate_parametric.py
 The experiment can be configured by modifying the constants in `run_parametric_experiment.py`:
 
 ```python
-NUM_LAYERS = 100              # Number of layers in standardized profiles
-MAX_DEPTH = 2000              # Maximum depth (m)
-N_NEW_PROFILES = 1000         # Number of new profiles to generate
-MODEL_TYPES = ['exponential', 'power_law', 'layered']
-GENERATIVE_MODEL_TYPES = ['gmm', 'mlp']
+NUM_LAYERS = 100  # Number of layers in standardized profiles
+MAX_DEPTH = 2000  # Maximum depth (m)
+N_NEW_PROFILES = 1000  # Number of new profiles to generate
+MODEL_TYPES = ["exponential", "power_law", "layered"]
+GENERATIVE_MODEL_TYPES = ["gmm", "mlp"]
 ```
 
 ## Output

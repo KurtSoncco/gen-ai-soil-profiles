@@ -19,7 +19,9 @@ try:
         FlowMatchingDataLoader,
         FlowMatchingDataset,
     )
-    from experiments.flow_matching_simplified.split_utils import get_train_val_test_indices
+    from experiments.flow_matching_simplified.split_utils import (
+        get_train_val_test_indices,
+    )
 except ImportError:
     import config as cfg_mod  # type: ignore
     from split_utils import get_train_val_test_indices  # type: ignore

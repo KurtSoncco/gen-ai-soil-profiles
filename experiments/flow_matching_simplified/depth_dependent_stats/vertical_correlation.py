@@ -4,11 +4,10 @@ Used to characterize the AR(1) or random-field structure.
 Adapted to work with [TTS, depth] sequences from FlowMatchingDataset.
 """
 
-from typing import Dict, List, Tuple
+from typing import Dict, List
 
 import matplotlib.pyplot as plt
 import numpy as np
-import torch
 
 from .depth_statistics import reconstruct_vs_profile
 
@@ -19,43 +18,43 @@ def compute_vertical_autocorrelation(
     lags: List[float] = [1.0, 2.0, 5.0, 10.0],
 ) -> Dict[float, float]:
     """Compute autocorrelation of ln(Vs) at various depth lags.
-    
+
     Args:
         depths: 1D array of depths (layer center depths)
         vs_values: 1D array of Vs (m/s)
         lags: List of depth lags (m) to compute correlation
-    
+
     Returns:
         Dictionary: {lag: correlation_coefficient}
     """
     if len(vs_values) < 2:
         return {lag: 0.0 for lag in lags}
-    
+
     ln_vs = np.log(vs_values)
     ln_vs_centered = ln_vs - np.mean(ln_vs)
-    
+
     correlations = {}
-    
+
     for lag in lags:
         # Find pairs of samples separated by approximately 'lag' depth
         valid_pairs = []
-        
+
         for i in range(len(depths)):
             # Find nearest sample at depth + lag
             target_depth = depths[i] + lag
-            
+
             # Find closest depth within tolerance
             diffs = np.abs(depths - target_depth)
             if diffs.min() < 0.5:  # Within 0.5 m tolerance
                 j = diffs.argmin()
                 if j != i:  # Don't pair with itself
                     valid_pairs.append((i, j))
-        
+
         if len(valid_pairs) > 1:
             pairs_array = np.array(valid_pairs)
             vs_lag0 = ln_vs_centered[pairs_array[:, 0]]
             vs_lag1 = ln_vs_centered[pairs_array[:, 1]]
-            
+
             # Compute correlation
             if len(vs_lag0) > 1 and np.std(vs_lag0) > 1e-10 and np.std(vs_lag1) > 1e-10:
                 correlation = np.corrcoef(vs_lag0, vs_lag1)[0, 1]
@@ -64,7 +63,7 @@ def compute_vertical_autocorrelation(
                 correlations[lag] = 0.0
         else:
             correlations[lag] = 0.0
-    
+
     return correlations
 
 
@@ -73,11 +72,11 @@ def compute_profile_statistics(
     lags: List[float] = [1.0, 2.0, 5.0, 10.0],
 ) -> Dict:
     """Compute vertical correlation statistics for all profiles in dataset.
-    
+
     Args:
         dataset: FlowMatchingDataset
         lags: List of depth lags to compute correlations
-    
+
     Returns:
         Dictionary with:
         - lag_correlations: {lag: [corr1, corr2, ...]} (per-profile correlations)
@@ -85,48 +84,48 @@ def compute_profile_statistics(
         - std_correlations: {lag: std_corr}
     """
     lag_correlations = {lag: [] for lag in lags}
-    
+
     print("Computing vertical correlations for all profiles...")
     for i in range(len(dataset)):
         if i % 1000 == 0:
             print(f"  Processing profile {i}/{len(dataset)}...")
-        
+
         try:
             # Get normalized sequence
             seq_normalized = dataset.sequences[i]
-            
+
             # Denormalize
             if dataset.normalize:
                 seq_denorm = dataset.denormalize_sequence(seq_normalized, i)
             else:
                 seq_denorm = seq_normalized
-            
+
             # Reconstruct Vs profile
             depths_boundaries, vs_values = reconstruct_vs_profile(
                 seq_denorm, apply_expm1=False
             )
-            
+
             if len(vs_values) < 2:
                 continue
-            
+
             # Convert to layer center depths
             layer_depths = (depths_boundaries[:-1] + depths_boundaries[1:]) / 2.0
-            
+
             # Compute correlations for this profile
             corrs = compute_vertical_autocorrelation(layer_depths, vs_values, lags)
-            
+
             for lag in lags:
                 lag_correlations[lag].append(corrs[lag])
-        
+
         except Exception as e:
             if i < 10:  # Only print first few errors
                 print(f"  Warning: Could not process profile {i}: {e}")
             continue
-    
+
     # Compute statistics
     mean_correlations = {}
     std_correlations = {}
-    
+
     for lag in lags:
         if lag_correlations[lag]:
             valid_corrs = [c for c in lag_correlations[lag] if not np.isnan(c)]
@@ -139,7 +138,7 @@ def compute_profile_statistics(
         else:
             mean_correlations[lag] = 0.0
             std_correlations[lag] = 0.0
-    
+
     return {
         "lag_correlations": lag_correlations,
         "mean_correlations": mean_correlations,
@@ -153,31 +152,40 @@ def plot_vertical_correlations(
     output_path: str,
 ) -> None:
     """Plot vertical correlation structure: real vs generated.
-    
+
     Args:
         real_corrs: Dictionary with mean_correlations and std_correlations
         generated_corrs: Dictionary with mean_correlations and std_correlations
         output_path: Path to save plot
-    
+
     If real_corrs and generated_corrs are the same (baseline plot),
     only the real data is plotted.
     """
     lags = sorted(real_corrs["mean_correlations"].keys())
-    
+
     # Check if this is a baseline plot (same data)
     is_baseline = real_corrs is generated_corrs or (
-        real_corrs.get("mean_correlations", {}) == generated_corrs.get("mean_correlations", {})
+        real_corrs.get("mean_correlations", {})
+        == generated_corrs.get("mean_correlations", {})
     )
-    
+
     fig, axes = plt.subplots(1, 2, figsize=(16, 6))
-    
+
     # Plot 1: Mean correlation vs lag
     ax = axes[0]
     real_means = [real_corrs["mean_correlations"][lag] for lag in lags]
     real_stds = [real_corrs["std_correlations"][lag] for lag in lags]
-    gen_means = [generated_corrs["mean_correlations"][lag] for lag in lags] if not is_baseline else []
-    gen_stds = [generated_corrs["std_correlations"][lag] for lag in lags] if not is_baseline else []
-    
+    gen_means = (
+        [generated_corrs["mean_correlations"][lag] for lag in lags]
+        if not is_baseline
+        else []
+    )
+    gen_stds = (
+        [generated_corrs["std_correlations"][lag] for lag in lags]
+        if not is_baseline
+        else []
+    )
+
     ax.errorbar(
         lags,
         real_means,
@@ -207,7 +215,7 @@ def plot_vertical_correlations(
     ax.grid(True, alpha=0.3)
     ax.legend(fontsize=10)
     ax.set_xscale("log")
-    
+
     # Plot 2: Distribution of correlations at lag=2m (or first available lag)
     ax = axes[1]
     if len(lags) > 0:
@@ -215,11 +223,11 @@ def plot_vertical_correlations(
         plot_lag = 2.0 if 2.0 in lags else lags[0]
         lag_2m_real = real_corrs["lag_correlations"].get(plot_lag, [])
         lag_2m_gen = generated_corrs["lag_correlations"].get(plot_lag, [])
-        
+
         # Filter out NaN values
         lag_2m_real = [c for c in lag_2m_real if not np.isnan(c)]
         lag_2m_gen = [c for c in lag_2m_gen if not np.isnan(c)]
-        
+
         if len(lag_2m_real) > 0:
             ax.hist(
                 lag_2m_real,
@@ -247,11 +255,11 @@ def plot_vertical_correlations(
         )
         ax.legend(fontsize=10)
         ax.grid(True, alpha=0.3)
-    
+
     plt.tight_layout()
     plt.savefig(output_path, dpi=150, bbox_inches="tight")
     plt.close()
-    
+
     print(f"Saved correlation plot to {output_path}")
 
 
@@ -307,4 +315,3 @@ if __name__ == "__main__":
             f"Lag {lag}m: mean={real_corrs['mean_correlations'][lag]:.4f}, "
             f"std={real_corrs['std_correlations'][lag]:.4f}"
         )
-

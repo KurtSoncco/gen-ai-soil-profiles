@@ -8,7 +8,6 @@ correlation structure.
 import argparse
 import json
 import os
-import random
 import sys
 from pathlib import Path
 
@@ -43,7 +42,6 @@ try:
         sample_sequences,
         save_checkpoint,
         set_seed,
-        train_epoch,
     )
     from experiments.flow_matching_simplified.utils import compute_vs_penalty
     from experiments.flow_matching_simplified.depth_dependent_stats import (
@@ -66,7 +64,6 @@ except ImportError:
         sample_sequences,
         save_checkpoint,
         set_seed,
-        train_epoch,
     )  # type: ignore
     from utils import compute_vs_penalty  # type: ignore
     from depth_dependent_stats import (

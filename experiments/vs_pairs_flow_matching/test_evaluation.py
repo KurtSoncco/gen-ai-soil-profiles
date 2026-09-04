@@ -42,9 +42,9 @@ def load_latest_checkpoint(dir_path: str) -> str:
 
     # Sort by step number
     files.sort(
-        key=lambda x: int(x.stem.split("_")[-1])
-        if x.stem != "checkpoint_final"
-        else float("inf")
+        key=lambda x: (
+            int(x.stem.split("_")[-1]) if x.stem != "checkpoint_final" else float("inf")
+        )
     )
     return str(files[-1])
 

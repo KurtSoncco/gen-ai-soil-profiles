@@ -195,18 +195,18 @@ class FlowMatchingDataLoader:
 
             # Convert to [ts, depth] pairs
             sequence = np.column_stack([ts_values, depths]).astype(np.float32)
-            
+
             # Remove (0,0) origin point if present - it's deterministic and shouldn't be learned
             # The (0,0) point is a fixed boundary condition, not part of the learned distribution.
             # It will be prepended back during evaluation/visualization for reconstruction.
             # Keep only breakpoints with depth > 0 or TTS > 0
             mask = (sequence[:, 1] > 0) | (sequence[:, 0] > 0)  # depth > 0 OR ts > 0
             sequence = sequence[mask]
-            
+
             # Skip if sequence becomes empty after removing origin
             if len(sequence) == 0:
                 continue
-            
+
             self.sequences.append(sequence)
             self.profile_ids.append(str(profile_id))
 

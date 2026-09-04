@@ -11,16 +11,14 @@ raw-TTS parquet.
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
 
 import pandas as pd
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(PROJECT_ROOT))
-
 from soilgen_ai.tts_profiles.check import TTSProfileProcessor
 from soilgen_ai.vs_profiles.vs_calculation import compute_tts
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
 def build_tts_profiles(

@@ -4,12 +4,10 @@ Used for both real data analysis and model validation.
 Adapted to work with [TTS, depth] sequences from FlowMatchingDataset.
 """
 
-import os
 from typing import Dict, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
-import torch
 
 
 def prepend_origin(sequence: np.ndarray) -> np.ndarray:
@@ -23,11 +21,11 @@ def reconstruct_vs_profile(
     apply_expm1: bool = False,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """Reconstruct full Vs profile from [TTS, depth] sequence.
-    
+
     Args:
         sequence: (n, 2) array with [TTS, depth] pairs
         apply_expm1: Whether to apply expm1 (if TTS was log1p normalized)
-    
+
     Returns:
         depths: Depth values (m) - layer boundaries (n+1 points)
         vs_values: Shear wave velocity (m/s) - per layer (n values)
@@ -37,30 +35,30 @@ def reconstruct_vs_profile(
             return np.array([0.0, sequence[0, 1]]), np.array([])
         else:
             return np.array([0.0]), np.array([])
-    
+
     # Prepend origin
     seq_with_origin = prepend_origin(sequence)
-    
+
     # Extract TTS and depth
     tts = seq_with_origin[:, 0]
     depths = seq_with_origin[:, 1]
-    
+
     if apply_expm1:
         tts = np.expm1(tts)
-    
+
     # Calculate layer thicknesses
     thicknesses = np.diff(depths)
-    
+
     # Calculate TTS differences (incremental TTS for each layer)
     dtts = np.diff(tts)
-    
+
     # Convert to Vs: Vs = dz / dt
     # Add small epsilon to avoid division by zero
     vs_values = thicknesses / (dtts + 1e-9)
-    
+
     # Ensure positive velocities (clip negative values)
     vs_values = np.maximum(vs_values, 0.1)
-    
+
     return depths, vs_values
 
 
@@ -71,13 +69,13 @@ def bin_by_depth(
     apply_log: bool = True,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Bin Vs values by depth and compute statistics.
-    
+
     Args:
         depths: 1D array of depths (layer center depths, same length as vs_values)
         vs_values: 1D array of Vs values (per layer)
         bin_edges: Depth bin edges (e.g., np.arange(0, 500, 10))
         apply_log: If True, compute ln(Vs) statistics
-    
+
     Returns:
         bin_centers: Center of each depth bin
         mean_vs: Mean Vs (or ln Vs) per bin
@@ -92,23 +90,23 @@ def bin_by_depth(
             np.full(len(bin_centers), np.nan),
             np.zeros(len(bin_centers)),
         )
-    
+
     # Ensure depths and vs_values have the same length
     if len(depths) != len(vs_values):
         min_len = min(len(depths), len(vs_values))
         depths = depths[:min_len]
         vs_values = vs_values[:min_len]
-    
+
     # depths are already layer center depths (not boundaries)
     layer_depths = depths
-    
+
     vs_to_use = np.log(vs_values) if apply_log else vs_values
-    
+
     bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
     means = []
     stds = []
     counts = []
-    
+
     for i in range(len(bin_edges) - 1):
         mask = (layer_depths >= bin_edges[i]) & (layer_depths < bin_edges[i + 1])
         if mask.sum() > 0:
@@ -119,7 +117,7 @@ def bin_by_depth(
             means.append(np.nan)
             stds.append(np.nan)
             counts.append(0)
-    
+
     return bin_centers, np.array(means), np.array(stds), np.array(counts)
 
 
@@ -129,12 +127,12 @@ def compute_real_data_statistics(
     max_depth: float = 500.0,
 ) -> Dict:
     """Compute depth-dependent statistics from real dataset.
-    
+
     Args:
         dataset: FlowMatchingDataset with denormalize_sequence capability
         bin_width: Depth bin width in meters
         max_depth: Maximum depth to consider
-    
+
     Returns:
         Dictionary with:
         - bin_centers: Depth bin centers
@@ -145,29 +143,29 @@ def compute_real_data_statistics(
         - all_vs: All Vs values (for debugging)
     """
     bin_edges = np.arange(0, max_depth + bin_width, bin_width)
-    
+
     all_depths = []
     all_vs = []
-    
+
     # Extract Vs profiles from dataset
     print("Extracting Vs profiles from dataset...")
     for i in range(len(dataset)):
         if i % 1000 == 0:
             print(f"  Processing sample {i}/{len(dataset)}...")
-        
+
         try:
             # Get normalized sequence
             seq_normalized = dataset.sequences[i]
-            
+
             # Denormalize
             if dataset.normalize:
                 seq_denorm = dataset.denormalize_sequence(seq_normalized, i)
             else:
                 seq_denorm = seq_normalized
-            
+
             # Reconstruct full profile with Vs
             depths, vs_values = reconstruct_vs_profile(seq_denorm, apply_expm1=False)
-            
+
             if len(vs_values) > 0:
                 # Map Vs values to layer center depths
                 layer_depths = (depths[:-1] + depths[1:]) / 2.0
@@ -177,17 +175,17 @@ def compute_real_data_statistics(
             if i < 10:  # Only print first few errors
                 print(f"  Warning: Could not process sample {i}: {e}")
             continue
-    
+
     all_depths = np.array(all_depths)
     all_vs = np.array(all_vs)
-    
+
     print(f"Extracted {len(all_vs)} Vs values from {len(dataset)} profiles")
-    
+
     # Bin by depth
     bin_centers, mean_ln_vs, std_ln_vs, bin_counts = bin_by_depth(
         all_depths, all_vs, bin_edges, apply_log=True
     )
-    
+
     return {
         "bin_centers": bin_centers,
         "mean_ln_vs": mean_ln_vs,
@@ -205,28 +203,34 @@ def plot_depth_statistics(
     output_path: str,
 ) -> None:
     """Plot real vs generated depth-dependent statistics.
-    
+
     Plots:
     - μ(ln Vs) vs depth
     - σ(ln Vs) vs depth
-    
+
     If real_stats and generated_stats are the same (baseline plot),
     only the real data is plotted.
     """
     fig, axes = plt.subplots(1, 2, figsize=(16, 6))
-    
+
     # Check if this is a baseline plot (same data)
     is_baseline = real_stats is generated_stats or (
-        np.array_equal(real_stats.get("mean_ln_vs", []), generated_stats.get("mean_ln_vs", []), equal_nan=True)
+        np.array_equal(
+            real_stats.get("mean_ln_vs", []),
+            generated_stats.get("mean_ln_vs", []),
+            equal_nan=True,
+        )
         if "mean_ln_vs" in real_stats and "mean_ln_vs" in generated_stats
         else False
     )
-    
+
     # Plot 1: Mean ln(Vs) vs depth
     ax = axes[0]
     real_valid = ~np.isnan(real_stats["mean_ln_vs"])
-    gen_valid = ~np.isnan(generated_stats["mean_ln_vs"]) if not is_baseline else np.array([])
-    
+    gen_valid = (
+        ~np.isnan(generated_stats["mean_ln_vs"]) if not is_baseline else np.array([])
+    )
+
     if real_valid.any():
         ax.plot(
             real_stats["bin_centers"][real_valid],
@@ -245,7 +249,7 @@ def plot_depth_statistics(
             color="blue",
             label="Real ±1σ" if not is_baseline else None,
         )
-    
+
     if gen_valid.any() and not is_baseline:
         ax.plot(
             generated_stats["bin_centers"][gen_valid],
@@ -256,14 +260,14 @@ def plot_depth_statistics(
             markersize=6,
             color="red",
         )
-    
+
     ax.set_xlabel("Depth (m)", fontsize=12)
     ax.set_ylabel("ln(Vs) [log m/s]", fontsize=12)
     ax.set_title("Mean ln(Vs) vs Depth", fontsize=14, fontweight="bold")
     ax.grid(True, alpha=0.3)
     ax.legend(fontsize=10)
     ax.invert_yaxis()  # Depth increases downward
-    
+
     # Plot 2: Std ln(Vs) vs depth
     ax = axes[1]
     if real_valid.any():
@@ -292,11 +296,11 @@ def plot_depth_statistics(
     ax.grid(True, alpha=0.3)
     ax.legend(fontsize=10)
     ax.invert_yaxis()  # Depth increases downward
-    
+
     plt.tight_layout()
     plt.savefig(output_path, dpi=150, bbox_inches="tight")
     plt.close()
-    
+
     print(f"Saved depth statistics plot to {output_path}")
 
 
@@ -352,4 +356,3 @@ if __name__ == "__main__":
     print(f"Bin centers: {real_stats['bin_centers'][:5]}...")
     print(f"Mean ln(Vs): {real_stats['mean_ln_vs'][:5]}...")
     print(f"Std ln(Vs):  {real_stats['std_ln_vs'][:5]}...")
-

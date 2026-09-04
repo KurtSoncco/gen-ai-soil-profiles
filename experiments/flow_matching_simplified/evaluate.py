@@ -26,7 +26,9 @@ try:
         FlowMatchingDataset,
     )
     from experiments.flow_matching_simplified.model import TransformerModel
-    from experiments.flow_matching_simplified.split_utils import get_train_val_test_indices
+    from experiments.flow_matching_simplified.split_utils import (
+        get_train_val_test_indices,
+    )
     from experiments.flow_matching_simplified.train import evaluate_model
     from experiments.flow_matching_simplified.utils import compute_sequence_statistics
 except ImportError:  # fallback when running as script

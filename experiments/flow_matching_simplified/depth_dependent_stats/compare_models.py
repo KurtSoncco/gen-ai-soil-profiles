@@ -23,7 +23,9 @@ try:
         FlowMatchingDataLoader,
         FlowMatchingDataset,
     )
-    from experiments.flow_matching_simplified.split_utils import get_train_val_test_indices
+    from experiments.flow_matching_simplified.split_utils import (
+        get_train_val_test_indices,
+    )
 except ImportError:
     sys.path.insert(0, str(Path(__file__).parent.parent))
     import config as cfg_mod  # type: ignore

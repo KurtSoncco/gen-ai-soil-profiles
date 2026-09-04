@@ -47,7 +47,9 @@ try:
         FlowMatchingDataset,
     )
     from experiments.flow_matching_simplified.model import TransformerModel
-    from experiments.flow_matching_simplified.split_utils import get_train_val_test_indices
+    from experiments.flow_matching_simplified.split_utils import (
+        get_train_val_test_indices,
+    )
     from experiments.flow_matching_simplified.utils import compute_vs_penalty
 except ImportError:  # fallback when running as script
     import config as cfg_mod
