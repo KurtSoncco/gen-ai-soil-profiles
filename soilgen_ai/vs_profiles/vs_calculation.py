@@ -282,11 +282,11 @@ def compute_tts(
     profile: pd.DataFrame, standardization: bool = False
 ) -> Optional[pd.DataFrame]:
     """
-    Computes the cumulative two-way travel time (TTS) for a Vs profile.
+    Computes the cumulative one-way travel time (TTS) for a Vs profile.
 
-    TTS is the time for a seismic wave to travel from the surface down to a
-    specific depth and reflect back to the surface. This function adds a 'tts'
-    column to the DataFrame.
+    TTS is the time for a shear wave to travel from the surface down to a
+    depth: each layer contributes ``Δt = thickness / Vs``. This function adds
+    a 'tts' column to the DataFrame.
 
     Args:
         profile (pd.DataFrame): A DataFrame with at least 'depth' (m) and
@@ -345,8 +345,8 @@ def compute_tts(
     # This corrects the bug in the original code.
     velocities = profile["vs_value"].iloc[:-1].to_numpy()
 
-    # Calculate two-way travel time for each individual layer
-    layer_tts = 2 * thickness / velocities
+    # One-way travel time for each layer: Δt = thickness / Vs
+    layer_tts = thickness / velocities
 
     # The TTS at any depth is the cumulative sum of the layer travel times above it.
     # The TTS at the surface (depth 0) is always 0.

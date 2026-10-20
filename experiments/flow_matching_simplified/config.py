@@ -105,6 +105,11 @@ class Config:
         """Directory for generated sample sequences."""
         return os.path.join(self.output_dir, "samples")
 
+    # Stage 6 prior. "gaussian" is the Stage 3 path.
+    prior_mode: str = "gaussian"
+    fixed_split_path: str | None = None
+    dataloader_seed: int | None = None
+
     # Misc
     seed: int = np.random.randint(0, 1000000)
 

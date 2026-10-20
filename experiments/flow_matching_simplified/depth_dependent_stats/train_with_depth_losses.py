@@ -88,6 +88,7 @@ def compute_flow_matching_loss_with_depth(
     target_std_ln_vs: torch.Tensor = None,
     target_correlations: dict = None,
     bin_edges: np.ndarray = None,
+    projection: torch.Tensor | None = None,
 ) -> tuple[torch.Tensor, dict]:
     """
     Compute flow matching loss with optional depth-aware regularization.
@@ -109,9 +110,9 @@ def compute_flow_matching_loss_with_depth(
     """
     batch_size, max_length, _ = u1.shape
 
-    # u0: Noise sequences
-    u0 = torch.randn_like(u1).to(device)
-    u0 = u0 * attention_mask.unsqueeze(-1).float()
+    from experiments.flow_matching_simplified.train import _initial_prior
+
+    u0 = _initial_prior(u1, attention_mask, config, projection)
 
     # t: Random time from [0, 1]
     t = torch.rand(batch_size, 1).to(device)
@@ -253,6 +254,9 @@ def train_epoch_with_depth_losses(
         tokens = batch["tokens"].to(device)
         attention_mask = batch["attention_mask"].to(device)
         sequence_stats = batch["sequence_stats"].to(device)
+        projection = batch.get("projection")
+        if projection is not None:
+            projection = projection.to(device)
 
         # Compute loss with depth-aware regularization
         loss, loss_dict = compute_flow_matching_loss_with_depth(
@@ -266,6 +270,7 @@ def train_epoch_with_depth_losses(
             target_std_ln_vs=target_std_ln_vs,
             target_correlations=target_correlations,
             bin_edges=bin_edges,
+            projection=projection,
         )
 
         # Backward pass
@@ -419,14 +424,21 @@ def main() -> None:
     assert data_loader.sequences is not None, "Sequences must be loaded"
     n_total = len(data_loader.sequences)
 
-    # Create train/val/test splits
-    all_indices = torch.randperm(n_total)
-    n_train = int(cfg.train_val_test_split[0] * n_total)
-    n_val = int(cfg.train_val_test_split[1] * n_total)
-
-    train_indices = all_indices[:n_train].tolist()
-    val_indices = all_indices[n_train : n_train + n_val].tolist()
-    test_indices = all_indices[n_train + n_val :].tolist()
+    # Create train/val/test splits. A fixed path keeps the seed-42 indices
+    # when the run seed changes model initialization only.
+    if getattr(cfg, "fixed_split_path", None):
+        with open(cfg.fixed_split_path) as split_file:
+            fixed_split = json.load(split_file)
+        train_indices = [int(i) for i in fixed_split["train"]]
+        val_indices = [int(i) for i in fixed_split["val"]]
+        test_indices = [int(i) for i in fixed_split["test"]]
+    else:
+        all_indices = torch.randperm(n_total)
+        n_train = int(cfg.train_val_test_split[0] * n_total)
+        n_val = int(cfg.train_val_test_split[1] * n_total)
+        train_indices = all_indices[:n_train].tolist()
+        val_indices = all_indices[n_train : n_train + n_val].tolist()
+        test_indices = all_indices[n_train + n_val :].tolist()
 
     print(
         f"Train: {len(train_indices)}, Val: {len(val_indices)}, Test: {len(test_indices)}"
@@ -454,12 +466,42 @@ def main() -> None:
         normalize=cfg.normalize,
     )
 
+    projection_report = None
+    if getattr(cfg, "prior_mode", "gaussian") == "projection":
+        from experiments.flow_matching_simplified.projection import (
+            attach_projections,
+            knot_outside_fraction,
+        )
+
+        attach_projections(
+            train_dataset, [data_loader.sequences[i] for i in train_indices]
+        )
+        attach_projections(
+            val_dataset, [data_loader.sequences[i] for i in val_indices]
+        )
+        attach_projections(test_dataset, test_sequences)
+        projection_report = knot_outside_fraction(
+            [data_loader.sequences[i] for i in train_indices]
+        )
+        print(
+            "Training projection knots outside [100, 5000]: "
+            f"{projection_report['fraction_outside']:.6f} "
+            f"({projection_report['n_outside']}/{projection_report['n_knots']})",
+            flush=True,
+        )
+
+    shuffle_generator = None
+    if getattr(cfg, "dataloader_seed", None) is not None:
+        shuffle_generator = torch.Generator()
+        shuffle_generator.manual_seed(int(cfg.dataloader_seed))
+
     # Create data loaders
     train_loader = data_loader.get_dataloader(
         train_dataset,
         batch_size=cfg.batch_size,
         shuffle=True,
         num_workers=cfg.num_workers,
+        generator=shuffle_generator,
     )
     val_loader = data_loader.get_dataloader(
         val_dataset,
@@ -589,6 +631,15 @@ def main() -> None:
         "val_losses": val_losses,
         "test_metrics": test_metrics,
         "best_val_loss": best_val_loss,
+        "seed": int(cfg.seed),
+        "prior_mode": getattr(cfg, "prior_mode", "gaussian"),
+        "fixed_split_path": getattr(cfg, "fixed_split_path", None),
+        "dataloader_seed": getattr(cfg, "dataloader_seed", None),
+        "n_train": len(train_indices),
+        "n_val": len(val_indices),
+        "n_test": len(test_indices),
+        "train_index_sum": int(sum(train_indices)),
+        "projection_knot_outside": projection_report,
     }
     results_path = os.path.join(cfg.results_dir, "final_results.json")
     with open(results_path, "w") as f:

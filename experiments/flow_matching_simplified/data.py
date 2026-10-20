@@ -154,6 +154,10 @@ class FlowMatchingDataset(Dataset):
         else:
             result["sequence_stats"] = torch.zeros(4)
 
+        projected = getattr(self, "projected", None)
+        if projected is not None:
+            result["projection"] = torch.as_tensor(projected[idx], dtype=torch.float32)
+
         return result
 
 
@@ -278,6 +282,7 @@ class FlowMatchingDataLoader:
         batch_size: int = 32,
         shuffle: bool = True,
         num_workers: int = 0,
+        generator: torch.Generator | None = None,
     ) -> DataLoader:
         """Create a PyTorch DataLoader from a dataset.
 
@@ -296,6 +301,7 @@ class FlowMatchingDataLoader:
             shuffle=shuffle,
             num_workers=num_workers,
             collate_fn=self._collate_fn,
+            generator=generator,
         )
 
     @staticmethod
@@ -316,13 +322,15 @@ class FlowMatchingDataLoader:
         attention_mask = torch.stack([item["attention_mask"] for item in batch])
         lengths = torch.stack([item["length"] for item in batch])
         sequence_stats = torch.stack([item["sequence_stats"] for item in batch])
-
-        return {
+        out = {
             "tokens": tokens,
             "attention_mask": attention_mask,
             "length": lengths,
             "sequence_stats": sequence_stats,
         }
+        if "projection" in batch[0]:
+            out["projection"] = torch.stack([item["projection"] for item in batch])
+        return out
 
 
 if __name__ == "__main__":

@@ -57,9 +57,9 @@ def test_compute_tts(sample_profile):
     # Check that TTS values are increasing
     assert all(pd.to_numeric(tts_profile["tts"].diff().iloc[1:]) > 0)
 
-    expected_tts = np.array(
-        [0.0, 0.05, 0.11666667, 0.231667, 0.319667, 0.529667, 0.749667]
-    )
+    thickness = np.diff(sample_profile["depth"].to_numpy())
+    layer_vs = sample_profile["vs_value"].to_numpy()[:-1]
+    expected_tts = np.concatenate([[0.0], np.cumsum(thickness / layer_vs)])
     np.testing.assert_allclose(tts_profile["tts"], expected_tts, rtol=1e-5)
 
     # Standarization as well

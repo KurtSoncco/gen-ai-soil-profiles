@@ -59,6 +59,17 @@ except ImportError:  # fallback when running as script
 wandb_run = None
 
 
+def _initial_prior(u1, attention_mask, config, projection):
+    """Stage 3 draws N(0, I). Projection mode uses Eq. 5 in token space."""
+    if getattr(config, "prior_mode", "gaussian") == "projection":
+        if projection is None:
+            raise RuntimeError("prior_mode projection requires a projection tensor")
+        from experiments.flow_matching_simplified.projection import mix_projection
+
+        return mix_projection(projection, attention_mask)
+    return torch.randn_like(u1) * attention_mask.unsqueeze(-1).float()
+
+
 def set_seed(seed: int) -> None:
     """Set random seed for reproducibility."""
     random.seed(seed)
@@ -74,6 +85,7 @@ def compute_flow_matching_loss(
     sequence_stats: torch.Tensor,
     device: torch.device,
     config: cfg_mod.Config | None = None,
+    projection: torch.Tensor | None = None,
 ) -> torch.Tensor:
     """
     Compute flow matching loss for variable-length sequences.
@@ -94,10 +106,7 @@ def compute_flow_matching_loss(
 
     batch_size, max_length, _ = u1.shape
 
-    # u0: Noise sequences - only generate noise where attention_mask is True
-    u0 = torch.randn_like(u1).to(device)
-    # Mask noise: keep padding as zeros
-    u0 = u0 * attention_mask.unsqueeze(-1).float()
+    u0 = _initial_prior(u1, attention_mask, config, projection)
 
     # t: Random time from [0, 1]
     t = torch.rand(batch_size, 1).to(device)
@@ -193,9 +202,18 @@ def evaluate_model(
 
             batch_size = tokens.shape[0]
 
+            projection = batch.get("projection")
+            if projection is not None:
+                projection = projection.to(device)
             # Compute flow matching loss
             loss = compute_flow_matching_loss(
-                model, tokens, attention_mask, sequence_stats, device, config=config
+                model,
+                tokens,
+                attention_mask,
+                sequence_stats,
+                device,
+                config=config,
+                projection=projection,
             )
             total_loss += loss.item() * batch_size
 
@@ -205,10 +223,7 @@ def evaluate_model(
             t_broadcast = (
                 t.unsqueeze(-1).expand(-1, tokens.shape[1], -1).expand(-1, -1, 2)
             )
-            u0 = (
-                torch.randn_like(tokens).to(device)
-                * attention_mask.unsqueeze(-1).float()
-            )
+            u0 = _initial_prior(tokens, attention_mask, config, projection)
             ut = (1 - t_broadcast) * u0 + t_broadcast * tokens
             predicted_v = model(ut, attention_mask, t, sequence_stats)
 
