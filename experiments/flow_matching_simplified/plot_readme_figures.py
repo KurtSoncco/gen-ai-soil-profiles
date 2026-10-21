@@ -1,8 +1,6 @@
-"""Redraw the README one-way figures.
+"""Redraw the README one-way figures from the end-of-training sequences.
 
-Uses the seed-42 test breakpoints and the 200 sequences saved at the end of
-one-way training. Style follows a Nature-style two-series contrast: navy for
-real profiles, vermillion for generated profiles, thin spines, and no grid.
+Colors, type, and column width come from ``soilgen_ai.figures.style``.
 """
 
 from __future__ import annotations
@@ -16,6 +14,8 @@ import pandas as pd
 import seaborn as sns
 from matplotlib.axes import Axes
 from scipy import stats as scipy_stats
+
+from soilgen_ai.figures.style import STYLE
 
 from experiments.flow_matching_simplified.comprehensive_eval import (
     compute_all_vs_values,
@@ -33,67 +33,23 @@ from experiments.flow_matching_simplified.depth_dependent_stats import (
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "docs" / "figures"
-REAL = "#3C5488"
-GENERATED = "#E64B35"
-BAND = "#4DBBD5"
-INK = "#222222"
-MUTED = "#666666"
-
-# Nature Publishing Group palette, high-contrast pair plus the cyan band.
-# Real is navy, generated is vermillion. Both stay distinct in grayscale
-# because one series is solid and the other is dashed.
+REAL = STYLE.real
+GENERATED = STYLE.flow
+BAND = STYLE.baseline
+INK = STYLE.ink
+MUTED = STYLE.muted
 
 
 def use_nature_style() -> None:
-    sns.set_theme(
-        context="paper",
-        style="ticks",
-        font="DejaVu Sans",
-        rc={
-            "figure.facecolor": "white",
-            "axes.facecolor": "white",
-            "axes.edgecolor": INK,
-            "axes.labelcolor": INK,
-            "axes.linewidth": 0.6,
-            "axes.labelsize": 8,
-            "axes.titlesize": 9,
-            "text.color": INK,
-            "xtick.color": INK,
-            "ytick.color": INK,
-            "xtick.labelsize": 7,
-            "ytick.labelsize": 7,
-            "xtick.major.width": 0.6,
-            "ytick.major.width": 0.6,
-            "xtick.major.size": 3,
-            "ytick.major.size": 3,
-            "legend.fontsize": 7,
-            "legend.frameon": False,
-            "pdf.fonttype": 42,
-            "ps.fonttype": 42,
-            "savefig.dpi": 300,
-        },
-    )
+    STYLE.apply()
 
 
 def _panel(ax: Axes, letter: str) -> None:
-    ax.text(
-        -0.14,
-        1.06,
-        letter,
-        transform=ax.transAxes,
-        fontsize=10,
-        fontweight="bold",
-        va="bottom",
-        ha="left",
-        color=INK,
-    )
+    STYLE.panel(ax, letter)
 
 
 def _save(fig: plt.Figure, name: str) -> None:
-    path = OUT / name
-    fig.savefig(path, dpi=300, bbox_inches="tight", facecolor="white")
-    plt.close(fig)
-    print(f"wrote {path}")
+    STYLE.save(fig, OUT / name)
 
 
 def _load() -> tuple[list[np.ndarray], list[np.ndarray]]:
