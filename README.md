@@ -60,7 +60,7 @@ Conditional flow matching trains a neural vector field `v_θ(u, t)` to transport
 
 ### Figures
 
-The first three figures are the representation the Transformer is trained on. Figures 4–8 are drawn from the seed-42 one-way run: 238 real test profiles in [`breakpoints_onewaytime.parquet`](experiments/flow_matching_simplified/data/breakpoints_onewaytime.parquet), and the 200 sequences saved at the end of training in `outputs/flow_matching_simplified_onewaytime/samples/generated_samples.npy`. Those 200 sequences are not the Stage 3 scoring draw, so the Kolmogorov–Smirnov numbers printed on Figures 5 and 6 are not the headline table in [Key Results](#-key-results).
+The first three figures are the representation the Transformer is trained on. Figures 4–8 are drawn from the seed-42 one-way run: 238 real test profiles in [`breakpoints_onewaytime.parquet`](experiments/flow_matching_simplified/data/breakpoints_onewaytime.parquet), and the 200 sequences saved at the end of training in `outputs/flow_matching_simplified_onewaytime/samples/generated_samples.npy`. Real profiles are navy (`#3C5488`) and generated profiles are vermillion (`#E64B35`), the high-contrast pair from the Nature Publishing Group palette. Those 200 sequences are not the Stage 3 scoring draw, so the Kolmogorov–Smirnov numbers on Figures 5 and 6 are not the headline table in [Key Results](#-key-results). Redraw them with `python -m experiments.flow_matching_simplified.plot_readme_figures`.
 
 ![Breakpoint tokenization](outputs/figures/flow_matching/breakpoints.png)
 *Figure 1 — Ten real profiles (dots) reduced to their piecewise-linear breakpoint tokens (X markers) in one-way travel-time/depth space [1]. This variable-length sequence is the representation learned by the flow-matching model [3].*
@@ -75,16 +75,16 @@ The first three figures are the representation the Transformer is trained on. Fi
 *Figure 4 — Fifteen seed-42 test profiles (left) and fifteen of the 200 end-of-training sequences (right), in one-way travel time and depth [1]. One generated trace is not monotonic. The full comparison is in [`docs/stage3_baseline_clean.md`](docs/stage3_baseline_clean.md).*
 
 ![Final depth, travel time, and breakpoint count](docs/figures/histograms_oneway.png)
-*Figure 5 — Final depth, total one-way travel time, and breakpoint count for the 238 test profiles and the 200 end-of-training sequences. Printed Kolmogorov–Smirnov statistics: final depth 0.118, total travel time 0.102, breakpoint count 0.066.*
+*Figure 5 — Final depth, total one-way travel time (the last token), and breakpoint count. Navy is the 238 test profiles; vermillion is the 200 end-of-training sequences. Kolmogorov–Smirnov statistics on the full samples: final depth 0.118, total travel time 0.074, breakpoint count 0.066. The depth axis stops at 500 m.*
 
 ![Shear-wave velocity histogram](docs/figures/vs_histograms_oneway.png)
-*Figure 6 — Layer `Vs` from `Vs = Δz / Δt` [1]. On this draw the real test layers have mean 480 m/s (std 461) and the generated layers have mean 700 m/s (std 378). Kolmogorov–Smirnov statistic 0.065.*
+*Figure 6 — Layer `Vs = Δz / Δt` [1]. The axis stops at 1,500 m/s; 58 real layers and 56 generated layers lie above it. Dashed lines are means over every positive finite layer: 480 m/s for the test set (s.d. 461) and 700 m/s for the generated layers (s.d. 3,776). That generated spread is a few extreme layers. Kolmogorov–Smirnov statistic on the full sample: 0.065.*
 
 ![Depth statistics, real and generated](docs/figures/depth_statistics_comparison.png)
-*Figure 7 — Mean and standard deviation of `ln(Vs)` in 10 m bins, from the surface to 500 m. Blue is the one-way training target (`real_depth_stats_onewaytime.pkl`). Red is the same binning of the 200 generated sequences. Mean-`ln(Vs)` RMSE is 1.102 and std-`ln(Vs)` RMSE is 1.032. The vertical axis follows the plotting routine and increases downward. Deep bins rest on few profiles, which is where the generated curve leaves the real band.*
+*Figure 7 — Mean and standard deviation of `ln(Vs)` in 10 m bins, from the surface to 200 m. Navy is the one-way training target (`real_depth_stats_onewaytime.pkl`), with a ±1 s.d. band. Vermillion is the 200 generated sequences. Open markers are bins with fewer than five generated layers. Mean-`ln(Vs)` RMSE on every bin out to 500 m is 1.102, and the standard-deviation RMSE is 1.032.*
 
 ![Training-target vertical correlation](docs/figures/correlations_comparison.png)
-*Figure 8 — The layer-center autocorrelation stored for training, not the 0.5 m-grid correlation in the results table. Targets are 0.0135 at 1 m, 0.0524 at 2 m, 0.0673 at 5 m, and 0.0360 at 10 m. The 200 generated sequences give −0.0088, 0.0314, 0.1101, and 0.1064 at those lags. The right panel is the profile-wise distribution at 2 m. Why this estimator sits near zero while evaluation reports 0.993 is in [`docs/stage7_bound_and_correlation.md`](docs/stage7_bound_and_correlation.md).*
+*Figure 8 — The layer-center autocorrelation stored for training, not the 0.5 m-grid correlation in the results table. The left panel is the mean only. Targets are 0.0135 at 1 m, 0.0524 at 2 m, 0.0673 at 5 m, and 0.0360 at 10 m. The 200 generated sequences give −0.0088, 0.0314, 0.1101, and 0.1064 at those lags. The right panel is the profile-wise distribution at 2 m, which is why a ±1 s.d. band would hide the means. Why this estimator sits near zero while evaluation reports 0.993 is in [`docs/stage7_bound_and_correlation.md`](docs/stage7_bound_and_correlation.md).*
 
 The Transformer follows two smaller flow-matching studies, [`synthetic_toy_profiles_flow_matching`](experiments/synthetic_toy_profiles_flow_matching) and [`vs_pairs_flow_matching`](experiments/vs_pairs_flow_matching). Checkpoints, parquets, and result JSON are gitignored. The numbers in [Key Results](#-key-results) are the record of the runs already completed. A fresh clone does not contain those weights.
 
