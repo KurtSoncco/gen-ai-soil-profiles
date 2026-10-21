@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 import matplotlib
+import pytest
 
 # Set non-interactive backend before importing pyplot (for headless environments/WSL)
 matplotlib.use("Agg")
@@ -18,6 +19,19 @@ project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 from experiments.synthetic_toy_profiles_flow_matching import config, data  # noqa: E402
+
+_PARQUET = Path(config.cfg.parquet_path)
+pytestmark = pytest.mark.skipif(
+    not _PARQUET.is_file(),
+    reason=f"missing {_PARQUET.name}; generate it with scripts/generate_synthetic_profiles.py",
+)
+
+
+@pytest.fixture
+def dataset():
+    """Dataset for the checks below. ``main`` passes this in directly."""
+    _, _, loaded = data.create_dataloader(batch_size=4, num_workers=0, shuffle=False)
+    return loaded
 
 
 def test_data_loading():
