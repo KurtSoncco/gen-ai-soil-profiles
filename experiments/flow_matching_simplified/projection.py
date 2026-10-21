@@ -25,7 +25,9 @@ LN_MAX = float(np.log(5000.0))
 KNOTS = np.asarray(TREND_DEPTHS_M, dtype=np.float64)
 
 
-def project_vector(values: np.ndarray, valid: np.ndarray, factor: int = FACTOR) -> np.ndarray:
+def project_vector(
+    values: np.ndarray, valid: np.ndarray, factor: int = FACTOR
+) -> np.ndarray:
     """Average contiguous groups of ``factor`` valid entries and interpolate back."""
     out = np.zeros(len(values), dtype=np.float64)
     idx = np.flatnonzero(valid)
@@ -182,7 +184,9 @@ def draw_trend_knots(
     return ln, valid, n_outside, int(len(idx))
 
 
-def tokens_from_knots(depths: np.ndarray, knot_values: np.ndarray, valid: np.ndarray) -> np.ndarray:
+def tokens_from_knots(
+    depths: np.ndarray, knot_values: np.ndarray, valid: np.ndarray
+) -> np.ndarray:
     """Passeri tokens at ``depths`` (surface included) from a knot field."""
     depths = np.asarray(depths, dtype=np.float64)
     known_z = KNOTS[valid]

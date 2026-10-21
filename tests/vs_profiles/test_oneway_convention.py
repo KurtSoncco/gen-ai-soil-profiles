@@ -9,7 +9,11 @@ import pytest
 from soilgen_ai.vs_profiles.vs_calculation import compute_tts
 
 PARQUET = Path(__file__).resolve().parents[2] / "data" / "vspdb_tts_profiles.parquet"
-ONEWAY = Path(__file__).resolve().parents[2] / "data" / "vspdb_tts_profiles_onewaytime.parquet"
+ONEWAY = (
+    Path(__file__).resolve().parents[2]
+    / "data"
+    / "vspdb_tts_profiles_onewaytime.parquet"
+)
 N_PROFILES = 25
 
 
@@ -29,7 +33,9 @@ def test_compute_tts_is_one_way():
     out = compute_tts(profile)
     assert out is not None
     thickness = np.diff(out["depth"].to_numpy())
-    expected = np.concatenate([[0.0], np.cumsum(thickness / out["vs_value"].to_numpy()[:-1])])
+    expected = np.concatenate(
+        [[0.0], np.cumsum(thickness / out["vs_value"].to_numpy()[:-1])]
+    )
     np.testing.assert_allclose(out["tts"].to_numpy(), expected, rtol=1e-12, atol=0.0)
 
 
@@ -64,7 +70,9 @@ def test_stored_parquet_inverts_to_vs_value():
         pytest.skip(f"missing {PARQUET}")
     worst, n_layers = _max_rel_error(PARQUET, N_PROFILES)
     assert n_layers > 0
-    assert worst < 1e-4, f"max relative error {worst} on {n_layers} layers from {PARQUET.name}"
+    assert worst < 1e-4, (
+        f"max relative error {worst} on {n_layers} layers from {PARQUET.name}"
+    )
 
 
 def test_oneway_parquet_inverts_to_vs_value():
@@ -72,4 +80,6 @@ def test_oneway_parquet_inverts_to_vs_value():
         pytest.skip(f"missing {ONEWAY}")
     worst, n_layers = _max_rel_error(ONEWAY, None)
     assert n_layers == 352092
-    assert worst < 1e-4, f"max relative error {worst} on {n_layers} layers from {ONEWAY.name}"
+    assert worst < 1e-4, (
+        f"max relative error {worst} on {n_layers} layers from {ONEWAY.name}"
+    )

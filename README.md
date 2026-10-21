@@ -9,7 +9,7 @@
 
 This repository explores generative AI techniques for synthesizing realistic, spatially-correlated shear-wave velocity (Vs) soil profiles for geotechnical and seismic-hazard applications. It progresses from closed-form parametric/stochastic baselines to deep generative models (VAE, GAN) and a **Transformer conditional flow-matching** model that generates variable-length profiles from real borehole data. On the one-way benchmark, that Transformer is the model under test, not the best score.
 
-[Research Questions](#-research-questions--hypothesis) • [Methodology](#️-methodology) • [Flagship Model](#-flagship-model-transformer-conditional-flow-matching) • [Data](#-data) • [How to Reproduce](#-how-to-reproduce) • [Key Results](#-key-results)
+[Research Questions](#-research-questions--hypothesis) • [Methodology](#️-methodology) • [Flagship Model](#-flagship-model-transformer-conditional-flow-matching) • [Data](#-data) • [How to Reproduce](#-how-to-reproduce) • [Key Results](#-key-results) • [References](#-references)
 
 ---
 
@@ -42,10 +42,10 @@ Older experiments in this table treat Vs as approximately log-normal and train o
 [`experiments/flow_matching_simplified`](experiments/flow_matching_simplified) is the variable-length model under test. It generates full-depth Vs profiles for real boreholes. On the one-way benchmark below, a fixed-grid Gaussian and a fixed-grid flow match or beat it. Variable length is a representation, not a performance claim.
 
 ### Why Flow Matching
-Conditional Flow Matching trains a neural vector field `v_θ(u, t)` to transport samples from a noise distribution at `t=0` toward real data at `t=1`, with a regression loss rather than an adversarial objective or an evidence lower bound. The numbers reported here use Euler integration with 50 steps. RK4 was swept on the same checkpoint and is not the headline integrator. See [`docs/stage3_baseline_clean.md`](docs/stage3_baseline_clean.md).
+Conditional flow matching trains a neural vector field `v_θ(u, t)` to transport samples from a noise distribution at `t=0` toward real data at `t=1`, with a regression loss rather than an adversarial objective or an evidence lower bound [3]. The numbers reported here use Euler integration with 50 steps. RK4 was swept on the same checkpoint and is not the headline integrator. See [`docs/stage3_baseline_clean.md`](docs/stage3_baseline_clean.md).
 
 ### Key techniques
-- **Breakpoint tokenization**: each profile is a variable-length sequence of `[one-way travel time, depth]` pairs at layer boundaries. One-way travel time of a layer is `Δt = h / Vs`. Inversion is `Vs = Δz / Δt`. This is the Passeri definition used by the flagship. A factor of 2 does not belong in that formula.
+- **Breakpoint tokenization**: each profile is a variable-length sequence of `[one-way travel time, depth]` pairs at layer boundaries. One-way travel time of a layer is `Δt = h / Vs`, and inversion is `Vs = Δz / Δt` [1], [2]. A factor of 2 does not belong in that formula.
 - **Per-profile normalization + sequence-stats conditioning**: each token sequence is z-score normalized using its *own* mean/std (so the network operates in a consistent unit-scale space), while the original `[ts_mean, ts_std, depth_mean, depth_std]` are fed back in as a conditioning vector — letting the model reconstruct each profile's absolute scale.
 - **Transformer encoder + sinusoidal time embedding**: a 4-layer, 8-head Transformer (256-dim) with positional encoding across breakpoint order, conditioned on a sinusoidal embedding of the flow-matching time variable `t`.
 - **Depth convolution block**: a shallow 1D convolution (kernel size 3) applied along the depth/layer axis with a residual connection, added specifically to improve short-lag (1–2 m) vertical coherence between neighboring layers.
@@ -60,14 +60,31 @@ Conditional Flow Matching trains a neural vector field `v_θ(u, t)` to transport
 
 ### Figures
 
+The first three figures are the representation the Transformer is trained on. Figures 4–8 are drawn from the seed-42 one-way run: 238 real test profiles in [`breakpoints_onewaytime.parquet`](experiments/flow_matching_simplified/data/breakpoints_onewaytime.parquet), and the 200 sequences saved at the end of training in `outputs/flow_matching_simplified_onewaytime/samples/generated_samples.npy`. Those 200 sequences are not the Stage 3 scoring draw, so the Kolmogorov–Smirnov numbers printed on Figures 5 and 6 are not the headline table in [Key Results](#-key-results).
+
 ![Breakpoint tokenization](outputs/figures/flow_matching/breakpoints.png)
-*Figure 1 — Ten real profiles (dots) reduced to their piecewise-linear breakpoint tokens (X markers) in travel-time/depth space. This variable-length breakpoint sequence is the input representation learned by the flow matching model.*
+*Figure 1 — Ten real profiles (dots) reduced to their piecewise-linear breakpoint tokens (X markers) in one-way travel-time/depth space [1]. This variable-length sequence is the representation learned by the flow-matching model [3].*
 
 ![Depth-dependent statistics](outputs/figures/flow_matching/depth_stats.png)
-*Figure 2 — Depth-binned mean and standard deviation of `ln(Vs)` computed from real VSPDB profiles. These are the stored depth-statistic targets. That loss does not train the vector field.*
+*Figure 2 — Depth-binned mean and standard deviation of `ln(Vs)` from real VSPDB profiles [5]. These are the stored depth-statistic targets. That loss does not train the vector field. See [`docs/stage7_bound_and_correlation.md`](docs/stage7_bound_and_correlation.md).*
 
 ![Vertical autocorrelation](outputs/figures/flow_matching/vertical_correlations.png)
-*Figure 3 — Empirical vertical autocorrelation of `ln(Vs)` vs. depth lag (left), and its full distribution at a 2 m lag (right). This is the layer-center statistic stored as a training target. It is not the 0.5 m-grid correlation used in evaluation.*
+*Figure 3 — Empirical vertical autocorrelation of `ln(Vs)` against depth lag (left), and its distribution at a 2 m lag (right). This is the layer-center statistic stored as a training target. It is not the 0.5 m-grid correlation of 0.993 reported for real test profiles in [Key Results](#-key-results).*
+
+![One-way profiles, real and generated](docs/figures/profiles_oneway.png)
+*Figure 4 — Fifteen seed-42 test profiles (left) and fifteen of the 200 end-of-training sequences (right), in one-way travel time and depth [1]. One generated trace is not monotonic. The full comparison is in [`docs/stage3_baseline_clean.md`](docs/stage3_baseline_clean.md).*
+
+![Final depth, travel time, and breakpoint count](docs/figures/histograms_oneway.png)
+*Figure 5 — Final depth, total one-way travel time, and breakpoint count for the 238 test profiles and the 200 end-of-training sequences. Printed Kolmogorov–Smirnov statistics: final depth 0.118, total travel time 0.102, breakpoint count 0.066.*
+
+![Shear-wave velocity histogram](docs/figures/vs_histograms_oneway.png)
+*Figure 6 — Layer `Vs` from `Vs = Δz / Δt` [1]. On this draw the real test layers have mean 480 m/s (std 461) and the generated layers have mean 700 m/s (std 378). Kolmogorov–Smirnov statistic 0.065.*
+
+![Depth statistics, real and generated](docs/figures/depth_statistics_comparison.png)
+*Figure 7 — Mean and standard deviation of `ln(Vs)` in 10 m bins, from the surface to 500 m. Blue is the one-way training target (`real_depth_stats_onewaytime.pkl`). Red is the same binning of the 200 generated sequences. Mean-`ln(Vs)` RMSE is 1.102 and std-`ln(Vs)` RMSE is 1.032. The vertical axis follows the plotting routine and increases downward. Deep bins rest on few profiles, which is where the generated curve leaves the real band.*
+
+![Training-target vertical correlation](docs/figures/correlations_comparison.png)
+*Figure 8 — The layer-center autocorrelation stored for training, not the 0.5 m-grid correlation in the results table. Targets are 0.0135 at 1 m, 0.0524 at 2 m, 0.0673 at 5 m, and 0.0360 at 10 m. The 200 generated sequences give −0.0088, 0.0314, 0.1101, and 0.1064 at those lags. The right panel is the profile-wise distribution at 2 m. Why this estimator sits near zero while evaluation reports 0.993 is in [`docs/stage7_bound_and_correlation.md`](docs/stage7_bound_and_correlation.md).*
 
 The Transformer follows two smaller flow-matching studies, [`synthetic_toy_profiles_flow_matching`](experiments/synthetic_toy_profiles_flow_matching) and [`vs_pairs_flow_matching`](experiments/vs_pairs_flow_matching). Checkpoints, parquets, and result JSON are gitignored. The numbers in [Key Results](#-key-results) are the record of the runs already completed. A fresh clone does not contain those weights.
 
@@ -150,3 +167,15 @@ The Conv1D VAE ([`experiments/VAE`](experiments/VAE)) reports a different metric
 | KS statistic (Vs30 distribution) | — | 0.0959 (good match) |
 | Mean ratio (generated/real) | — | 1.0117 |
 | Std ratio (generated/real) | — | 0.8712 |
+
+Figures 4–8 show the end-of-training one-way draw next to the real test profiles. The structured prior that was tested against this benchmark, and then dropped, is the Gaussian-trend stand-in for `G_φ` in [4]. The keep rule and the three-seed numbers are in [`docs/stage6_structured_prior_stage1.md`](docs/stage6_structured_prior_stage1.md).
+
+---
+
+## 📚 References
+
+1. Passeri, F. (2019). *Development of an advanced geostatistical model for shear wave velocity profiles to manage uncertainties and variabilities in ground response analyses.* Doctoral dissertation, Politecnico di Torino. https://doi.org/10.6092/polito/porto/2730182
+2. Passeri, F., Foti, S., and Rodriguez-Marek, A. (2020). A new geostatistical model for shear wave velocity profiles. *Soil Dynamics and Earthquake Engineering*, 136, 106247. https://doi.org/10.1016/j.soildyn.2020.106247
+3. Lipman, Y., Chen, R. T. Q., Ben-Hamu, H., Nickel, M., and Le, M. (2023). Flow matching for generative modeling. *International Conference on Learning Representations.* https://arxiv.org/abs/2210.02747
+4. Malnick, B., Rusanovsky, M., Fried, O., and Avidan, S. (2026). Designing optimal transport flows. arXiv:2606.04092. https://arxiv.org/abs/2606.04092
+5. Vs Profile Database (VSPDB). https://www.vspdb.org

@@ -100,7 +100,9 @@ def profile_features(seq: np.ndarray) -> dict[str, float]:
         h = float(np.max(seq[:, 1]))
     n_layers = int(len(vs)) if len(vs) else max(len(seq) - 1, 0)
     vs_mean = float(np.mean(vs)) if len(vs) else np.nan
-    contrast = float(np.max(vs) / np.clip(np.min(vs), 1e-6, None)) if len(vs) else np.nan
+    contrast = (
+        float(np.max(vs) / np.clip(np.min(vs), 1e-6, None)) if len(vs) else np.nan
+    )
     cls = nehrp_class(vs30)
     return {
         "vs30": float(vs30) if np.isfinite(vs30) else np.nan,
@@ -125,7 +127,9 @@ def feature_matrix(records: list[dict]) -> np.ndarray:
     for r in records:
         if not r["valid"]:
             continue
-        contrast = r["contrast"] if np.isfinite(r["contrast"]) and r["contrast"] > 0 else 1.0
+        contrast = (
+            r["contrast"] if np.isfinite(r["contrast"]) and r["contrast"] > 0 else 1.0
+        )
         rows.append(
             [
                 np.log(max(r["vs30"], 1.0)),
@@ -155,7 +159,12 @@ def knn_radii(x: np.ndarray, k: int) -> np.ndarray:
 def prdc(real: np.ndarray, fake: np.ndarray, k: int = K_PRDC) -> dict[str, float]:
     """Naeem et al. 2020 density/coverage + Kynkäänniemi precision/recall."""
     if len(real) < k + 1 or len(fake) < k + 1:
-        return {"precision": np.nan, "recall": np.nan, "density": np.nan, "coverage": np.nan}
+        return {
+            "precision": np.nan,
+            "recall": np.nan,
+            "density": np.nan,
+            "coverage": np.nan,
+        }
     real_r = knn_radii(real, k)
     fake_r = knn_radii(fake, k)
     d_fr = cdist(fake, real, metric="euclidean")
@@ -201,7 +210,13 @@ def scalar_tests(real: np.ndarray, fake: np.ndarray) -> dict[str, float]:
     real = real[np.isfinite(real)]
     fake = fake[np.isfinite(fake)]
     if len(real) < 5 or len(fake) < 5:
-        return {"ks": np.nan, "ks_p": np.nan, "w1": np.nan, "mean_real": np.nan, "mean_gen": np.nan}
+        return {
+            "ks": np.nan,
+            "ks_p": np.nan,
+            "w1": np.nan,
+            "mean_real": np.nan,
+            "mean_gen": np.nan,
+        }
     ks = scipy_stats.ks_2samp(real, fake)
     return {
         "ks": float(ks.statistic),
@@ -342,7 +357,9 @@ def linreg(x: np.ndarray, y: np.ndarray) -> dict[str, float]:
     }
 
 
-def compare_sets(real_rec: list[dict], gen_rec: list[dict], rng: np.random.Generator) -> dict:
+def compare_sets(
+    real_rec: list[dict], gen_rec: list[dict], rng: np.random.Generator
+) -> dict:
     real_f = feature_matrix(real_rec)
     gen_f = feature_matrix(gen_rec)
     n_match = min(len(real_f), len(gen_f))
@@ -468,10 +485,20 @@ def main() -> None:
     test_stats = [real_rec[i]["stats"] for i in test_idx]
     test_lengths = [real_rec[i]["length"] for i in test_idx]
     paired_seqs = sample_conditional(
-        model, test_stats, test_lengths, cfg.max_length, device, ode_steps=50, batch_size=32
+        model,
+        test_stats,
+        test_lengths,
+        cfg.max_length,
+        device,
+        ode_steps=50,
+        batch_size=32,
     )
     paired_rec = [profile_features(s) for s in paired_seqs]
-    np.save(OUT_DIR / "paired_test_latest.npy", np.array(paired_seqs, dtype=object), allow_pickle=True)
+    np.save(
+        OUT_DIR / "paired_test_latest.npy",
+        np.array(paired_seqs, dtype=object),
+        allow_pickle=True,
+    )
 
     real_vs = np.array([real_rec[i]["vs30"] for i in test_idx])
     gen_vs = np.array([r["vs30"] for r in paired_rec])
@@ -489,7 +516,9 @@ def main() -> None:
         "vs30_abs_err": {
             "mae": float(np.nanmean(np.abs(gen_vs - real_vs))),
             "medae": float(np.nanmedian(np.abs(gen_vs - real_vs))),
-            "mape": float(np.nanmean(np.abs(gen_vs - real_vs) / np.clip(real_vs, 1.0, None))),
+            "mape": float(
+                np.nanmean(np.abs(gen_vs - real_vs) / np.clip(real_vs, 1.0, None))
+            ),
         },
         "bias_vs30": float(np.nanmean(gen_vs - real_vs)),
         "valid_rate": float(np.mean([r["valid"] for r in paired_rec])),
@@ -573,7 +602,9 @@ def main() -> None:
     vs_sorted = sorted(valid_train, key=lambda r: r["vs30"])
     bands = {
         "soft_p10": vs_sorted[: max(1, len(vs_sorted) // 10)],
-        "typical_p40_60": vs_sorted[int(0.4 * len(vs_sorted)) : int(0.6 * len(vs_sorted))],
+        "typical_p40_60": vs_sorted[
+            int(0.4 * len(vs_sorted)) : int(0.6 * len(vs_sorted))
+        ],
         "stiff_p90": vs_sorted[int(0.9 * len(vs_sorted)) :],
     }
     quantile_out = {}

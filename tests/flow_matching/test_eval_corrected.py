@@ -21,7 +21,9 @@ def test_round_trip_known_profile():
     vs = np.array([200.0, 400.0, 800.0])
     tokens = _layered(depths, vs)
     expected_dt = np.diff(depths) / vs
-    np.testing.assert_allclose(np.diff(np.concatenate([[0.0], tokens[:, 0]])), expected_dt)
+    np.testing.assert_allclose(
+        np.diff(np.concatenate([[0.0], tokens[:, 0]])), expected_dt
+    )
     _, _, recovered = vs_from_travel_time(tokens)
     np.testing.assert_allclose(recovered, vs)
     doubled = 2.0 * np.diff(depths) / expected_dt

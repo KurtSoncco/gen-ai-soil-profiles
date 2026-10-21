@@ -16,12 +16,29 @@ import torch
 from torch import nn
 
 from experiments.flow_matching_simplified.data import FlowMatchingDataLoader
-from experiments.flow_matching_simplified.eval_corrected import TREND_DEPTHS_M, ln_vs_matrix
+from experiments.flow_matching_simplified.eval_corrected import (
+    TREND_DEPTHS_M,
+    ln_vs_matrix,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
-DATA = ROOT / "experiments" / "flow_matching_simplified" / "data" / "breakpoints_onewaytime.parquet"
-SPLIT = ROOT / "outputs" / "flow_matching_simplified" / "results" / "split_indices_seed42.json"
-OUT = ROOT / "outputs" / "flow_matching_simplified" / "results" / "fixed_grid_timing.json"
+DATA = (
+    ROOT
+    / "experiments"
+    / "flow_matching_simplified"
+    / "data"
+    / "breakpoints_onewaytime.parquet"
+)
+SPLIT = (
+    ROOT
+    / "outputs"
+    / "flow_matching_simplified"
+    / "results"
+    / "split_indices_seed42.json"
+)
+OUT = (
+    ROOT / "outputs" / "flow_matching_simplified" / "results" / "fixed_grid_timing.json"
+)
 
 FACTOR = 4
 ALPHA = 0.5
@@ -59,7 +76,9 @@ def project_rows(values: np.ndarray, valid: np.ndarray, factor: int) -> np.ndarr
 class GridFlow(nn.Module):
     def __init__(self, n_knots: int) -> None:
         super().__init__()
-        self.time = nn.Sequential(nn.Linear(1, HIDDEN), nn.SiLU(), nn.Linear(HIDDEN, HIDDEN))
+        self.time = nn.Sequential(
+            nn.Linear(1, HIDDEN), nn.SiLU(), nn.Linear(HIDDEN, HIDDEN)
+        )
         blocks: list[nn.Module] = []
         width = n_knots * 2 + HIDDEN
         for _ in range(N_LAYERS):
@@ -69,7 +88,9 @@ class GridFlow(nn.Module):
         blocks.append(nn.Linear(HIDDEN, n_knots))
         self.net = nn.Sequential(*blocks)
 
-    def forward(self, x: torch.Tensor, mask: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self, x: torch.Tensor, mask: torch.Tensor, t: torch.Tensor
+    ) -> torch.Tensor:
         h = torch.cat([x, mask, self.time(t)], dim=-1)
         return self.net(h) * mask
 
@@ -113,7 +134,6 @@ def main() -> None:
     train = [loader.sequences[i] for i in split["train"]]
     raw = ln_vs_matrix(train, TREND_DEPTHS_M)
     valid = np.isfinite(raw)
-    filled = np.where(valid, raw, 0.0)
     mu = np.zeros(raw.shape[1])
     sig = np.ones(raw.shape[1])
     for j in range(raw.shape[1]):

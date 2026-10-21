@@ -40,7 +40,7 @@ def sample_ffm(model, initial_noise, ode_steps, device, ode_solver: str = "rk4")
 
     # Start with noise at t=0 - shape should be (batch_size, 3)
     u = initial_noise.to(device)  # (batch_size, 3)
-    
+
     dt = 1.0 / ode_steps
 
     if ode_solver == "euler":
@@ -255,24 +255,24 @@ def compute_layer_statistics(
 def compute_breakpoint_statistics(breakpoints: np.ndarray) -> dict:
     """
     Compute statistics for breakpoints.
-    
+
     Args:
         breakpoints: Array of shape (N, 3) with [depth1, tts1, tts_end] for each profile
-    
+
     Returns:
         Dictionary with breakpoint statistics
     """
     if breakpoints.shape[1] != 3:
         raise ValueError(f"Expected breakpoints shape (N, 3), got {breakpoints.shape}")
-    
+
     # Point 1: origin (0, 0) - implicit, no distribution
     # Point 2: breakpoint (depth1, tts1)
     # Point 3: end point (500, tts_end)
-    
+
     depth1_values = breakpoints[:, 0]
     tts1_values = breakpoints[:, 1]
     tts_end_values = breakpoints[:, 2]
-    
+
     return {
         "depth1_mean": float(np.mean(depth1_values)),
         "depth1_std": float(np.std(depth1_values)),
@@ -299,7 +299,7 @@ def log_profiles_metrics(model, cfg, device, step, output_dir, dataset, wandb=No
         from .data import reconstruct_profile
     except ImportError:
         from data import reconstruct_profile
-    
+
     # Generate samples for evaluation (breakpoints)
     num_eval_samples = min(256, len(dataset))
     z_eval = torch.randn(num_eval_samples, 3).to(device)
@@ -333,22 +333,28 @@ def log_profiles_metrics(model, cfg, device, step, output_dir, dataset, wandb=No
     real_stats = compute_breakpoint_statistics(real_breakpoints_np)
     gen_stats = compute_breakpoint_statistics(generated_breakpoints_np)
 
-    print(f"  Point 1 (origin): (0, 0) - implicit")
-    print(f"  Point 2 (breakpoint):")
-    print(f"    depth1: Real={real_stats['depth1_mean']:.2f}±{real_stats['depth1_std']:.2f}, "
-          f"Gen={gen_stats['depth1_mean']:.2f}±{gen_stats['depth1_std']:.2f}")
-    print(f"    tts1: Real={real_stats['tts1_mean']:.4f}±{real_stats['tts1_std']:.4f}, "
-          f"Gen={gen_stats['tts1_mean']:.4f}±{gen_stats['tts1_std']:.4f}")
-    print(f"  Point 3 (end):")
-    print(f"    tts_end: Real={real_stats['tts_end_mean']:.4f}±{real_stats['tts_end_std']:.4f}, "
-          f"Gen={gen_stats['tts_end_mean']:.4f}±{gen_stats['tts_end_std']:.4f}")
+    print("  Point 1 (origin): (0, 0) - implicit")
+    print("  Point 2 (breakpoint):")
+    print(
+        f"    depth1: Real={real_stats['depth1_mean']:.2f}±{real_stats['depth1_std']:.2f}, "
+        f"Gen={gen_stats['depth1_mean']:.2f}±{gen_stats['depth1_std']:.2f}"
+    )
+    print(
+        f"    tts1: Real={real_stats['tts1_mean']:.4f}±{real_stats['tts1_std']:.4f}, "
+        f"Gen={gen_stats['tts1_mean']:.4f}±{gen_stats['tts1_std']:.4f}"
+    )
+    print("  Point 3 (end):")
+    print(
+        f"    tts_end: Real={real_stats['tts_end_mean']:.4f}±{real_stats['tts_end_std']:.4f}, "
+        f"Gen={gen_stats['tts_end_mean']:.4f}±{gen_stats['tts_end_std']:.4f}"
+    )
 
     # Compute KS statistics for distributions
-    ks_depth1 = ks_statistic(real_stats['depth1_values'], gen_stats['depth1_values'])
-    ks_tts1 = ks_statistic(real_stats['tts1_values'], gen_stats['tts1_values'])
-    ks_tts_end = ks_statistic(real_stats['tts_end_values'], gen_stats['tts_end_values'])
+    ks_depth1 = ks_statistic(real_stats["depth1_values"], gen_stats["depth1_values"])
+    ks_tts1 = ks_statistic(real_stats["tts1_values"], gen_stats["tts1_values"])
+    ks_tts_end = ks_statistic(real_stats["tts_end_values"], gen_stats["tts_end_values"])
 
-    print(f"  KS Statistics:")
+    print("  KS Statistics:")
     print(f"    depth1: {ks_depth1:.4f}")
     print(f"    tts1: {ks_tts1:.4f}")
     print(f"    tts_end: {ks_tts_end:.4f}")
@@ -359,12 +365,12 @@ def log_profiles_metrics(model, cfg, device, step, output_dir, dataset, wandb=No
             wandb.log(
                 {
                     "step": step,
-                    "metrics/point2_depth1_mean": float(gen_stats['depth1_mean']),
-                    "metrics/point2_depth1_std": float(gen_stats['depth1_std']),
-                    "metrics/point2_tts1_mean": float(gen_stats['tts1_mean']),
-                    "metrics/point2_tts1_std": float(gen_stats['tts1_std']),
-                    "metrics/point3_tts_end_mean": float(gen_stats['tts_end_mean']),
-                    "metrics/point3_tts_end_std": float(gen_stats['tts_end_std']),
+                    "metrics/point2_depth1_mean": float(gen_stats["depth1_mean"]),
+                    "metrics/point2_depth1_std": float(gen_stats["depth1_std"]),
+                    "metrics/point2_tts1_mean": float(gen_stats["tts1_mean"]),
+                    "metrics/point2_tts1_std": float(gen_stats["tts1_std"]),
+                    "metrics/point3_tts_end_mean": float(gen_stats["tts_end_mean"]),
+                    "metrics/point3_tts_end_std": float(gen_stats["tts_end_std"]),
                     "metrics/ks_depth1": float(ks_depth1),
                     "metrics/ks_tts1": float(ks_tts1),
                     "metrics/ks_tts_end": float(ks_tts_end),
@@ -376,55 +382,61 @@ def log_profiles_metrics(model, cfg, device, step, output_dir, dataset, wandb=No
     # Reconstruct profiles for visualization
     if step % cfg.checkpoint_every == 0 or step == cfg.num_steps - 1:
         # Reconstruct profiles from breakpoints (already denormalized, so apply_expm1=False)
-        real_profiles = np.array([reconstruct_profile(bp, dataset.max_depth, apply_expm1=False) 
-                                  for bp in real_breakpoints_np])
-        gen_profiles = np.array([reconstruct_profile(bp, dataset.max_depth, apply_expm1=False) 
-                                for bp in generated_breakpoints_np])
-        
+        real_profiles = np.array(
+            [
+                reconstruct_profile(bp, dataset.max_depth, apply_expm1=False)
+                for bp in real_breakpoints_np
+            ]
+        )
+        gen_profiles = np.array(
+            [
+                reconstruct_profile(bp, dataset.max_depth, apply_expm1=False)
+                for bp in generated_breakpoints_np
+            ]
+        )
+
         # Reshape for plotting (add channel dimension)
         real_profiles = real_profiles[:, np.newaxis, :]  # (N, 1, 500)
         gen_profiles = gen_profiles[:, np.newaxis, :]  # (N, 1, 500)
-        
-        plot_profile_comparison(
-            real_profiles, gen_profiles, cfg.plots_dir, step
-        )
+
+        plot_profile_comparison(real_profiles, gen_profiles, cfg.plots_dir, step)
 
 
 def tts_to_vs(tts_profile: np.ndarray, dz: float = 1.0) -> np.ndarray:
     """
     Convert travel time profile to Vs (shear wave velocity) profile.
-    
+
     For a piecewise linear travel time profile:
     - Travel time increment per depth step: d(tts) = slope * dz
     - Vs = dz / d(tts) = dz / (slope * dz) = 1 / slope
-    
+
     For piecewise linear: vs = depth_range / tts_range
-    
+
     Args:
         tts_profile: Array of travel time values (length,)
         dz: Depth increment in meters (default 1.0)
-    
+
     Returns:
         Array of Vs values (length,)
     """
     vs_profile = np.zeros_like(tts_profile)
-    
+
     # Compute finite differences (slope of travel time)
     # d_tts[i] = tts[i] - tts[i-1] for i > 0, and d_tts[0] = tts[0] - 0
     d_tts = np.diff(tts_profile, prepend=0.0)
-    
+
     # Avoid division by zero - use a small epsilon
     d_tts = np.where(np.abs(d_tts) < 1e-9, 1e-9, d_tts)
-    
+
     # Vs = dz / d(tts) where d(tts) is the travel time increment per depth step
     # For piecewise linear: d(tts) = slope * dz, so vs = dz / (slope * dz) = 1 / slope
     # But we have d_tts = tts[i] - tts[i-1], so:
     # vs = dz / d_tts
     vs_profile = dz / d_tts
-    
+
     # Clip to reasonable Vs range (e.g., 100-5000 m/s)
     vs_profile = np.clip(vs_profile, 100.0, 5000.0)
-    
+
     return vs_profile.astype(np.float32)
 
 
@@ -438,7 +450,7 @@ def plot_tts_vs_samples(
 ) -> None:
     """
     Plot travel time and corresponding Vs profiles for generated samples.
-    
+
     Args:
         breakpoints: Array of shape (N, 3) with breakpoints [depth1, tts1, tts_end]
         output_path: Path to save the plot
@@ -448,81 +460,124 @@ def plot_tts_vs_samples(
         title: Plot title
     """
     import matplotlib.pyplot as plt
+
     try:
         from .data import reconstruct_profile
     except ImportError:
         from data import reconstruct_profile
-    
+
     # Limit number of samples
     num_samples = min(num_samples, len(breakpoints))
     breakpoints = breakpoints[:num_samples]
-    
+
     # Create figure with 1 row, 2 columns
     fig, axes = plt.subplots(1, 2, figsize=(14, 8))
-    
+
     # Depth array (multiply index by dz)
     depths = np.arange(max_depth) * dz
-    
+
     # Plot all samples
     for i, bp in enumerate(breakpoints):
         # Reconstruct travel time profile
         # Breakpoints are expected to be in original space (after expm1), so use apply_expm1=False
         tts_profile = reconstruct_profile(bp, max_depth, apply_expm1=False)
-        
+
         # Convert to Vs profile
         vs_profile = tts_to_vs(tts_profile, dz)
-        
+
         # Plot travel time (left)
-        axes[0].plot(tts_profile, depths, alpha=0.3, linewidth=0.5, color='blue')
-        
+        axes[0].plot(tts_profile, depths, alpha=0.3, linewidth=0.5, color="blue")
+
         # Plot Vs (right)
-        axes[1].plot(vs_profile, depths, alpha=0.3, linewidth=0.5, color='red')
-    
+        axes[1].plot(vs_profile, depths, alpha=0.3, linewidth=0.5, color="red")
+
     # Add median and geometric mean profiles for reference
     if len(breakpoints) > 1:
         # Reconstruct all profiles
-        all_tts = np.array([reconstruct_profile(bp, max_depth, apply_expm1=False) for bp in breakpoints])
+        all_tts = np.array(
+            [
+                reconstruct_profile(bp, max_depth, apply_expm1=False)
+                for bp in breakpoints
+            ]
+        )
         all_vs = np.array([tts_to_vs(tts, dz) for tts in all_tts])
-        
+
         # Compute median
         median_tts = np.median(all_tts, axis=0)
         median_vs = np.median(all_vs, axis=0)
-        
+
         # Compute geometric mean (exp of mean of log)
         # Use log to avoid issues with zeros/negative values
         log_tts = np.log(np.maximum(all_tts, 1e-9))  # Avoid log(0)
         log_vs = np.log(np.maximum(all_vs, 1e-9))  # Avoid log(0)
         geomean_tts = np.exp(np.mean(log_tts, axis=0))
         geomean_vs = np.exp(np.mean(log_vs, axis=0))
-        
+
         # Plot median and geometric mean with thicker lines
-        axes[0].plot(median_tts, depths, alpha=0.9, linewidth=2, color='darkblue', label='Median', linestyle='-')
-        axes[0].plot(geomean_tts, depths, alpha=0.9, linewidth=2, color='navy', label='GeoMean', linestyle='--')
-        axes[1].plot(median_vs, depths, alpha=0.9, linewidth=2, color='darkred', label='Median', linestyle='-')
-        axes[1].plot(geomean_vs, depths, alpha=0.9, linewidth=2, color='darkorange', label='GeoMean', linestyle='--')
-        
+        axes[0].plot(
+            median_tts,
+            depths,
+            alpha=0.9,
+            linewidth=2,
+            color="darkblue",
+            label="Median",
+            linestyle="-",
+        )
+        axes[0].plot(
+            geomean_tts,
+            depths,
+            alpha=0.9,
+            linewidth=2,
+            color="navy",
+            label="GeoMean",
+            linestyle="--",
+        )
+        axes[1].plot(
+            median_vs,
+            depths,
+            alpha=0.9,
+            linewidth=2,
+            color="darkred",
+            label="Median",
+            linestyle="-",
+        )
+        axes[1].plot(
+            geomean_vs,
+            depths,
+            alpha=0.9,
+            linewidth=2,
+            color="darkorange",
+            label="GeoMean",
+            linestyle="--",
+        )
+
         axes[0].legend()
         axes[1].legend()
-    
+
     # Configure travel time plot (left)
     axes[0].set_xlabel("Travel Time (s)", fontsize=12)
     axes[0].set_ylabel("Depth (m)", fontsize=12)
-    axes[0].set_title("Travel Time Profiles", fontsize=14, fontweight='bold')
+    axes[0].set_title("Travel Time Profiles", fontsize=14, fontweight="bold")
     axes[0].grid(True, alpha=0.3)
     axes[0].invert_yaxis()  # Depth increases downward
     axes[0].set_ylim(depths[-1], depths[0])
-    
+
     # Configure Vs plot (right)
     axes[1].set_xlabel("Vs (m/s)", fontsize=12)
     axes[1].set_ylabel("Depth (m)", fontsize=12)
-    axes[1].set_title("Vs Profiles", fontsize=14, fontweight='bold')
+    axes[1].set_title("Vs Profiles", fontsize=14, fontweight="bold")
     axes[1].grid(True, alpha=0.3)
     axes[1].invert_yaxis()  # Depth increases downward
     axes[1].set_ylim(depths[-1], depths[0])
-    
+
     # Overall title
-    fig.suptitle(f"{title} ({num_samples} samples, dz={dz}m)", fontsize=16, fontweight='bold', y=0.98)
-    
+    fig.suptitle(
+        f"{title} ({num_samples} samples, dz={dz}m)",
+        fontsize=16,
+        fontweight="bold",
+        y=0.98,
+    )
+
     plt.tight_layout()
     plt.savefig(output_path, dpi=300, bbox_inches="tight")
     plt.close()
@@ -550,6 +605,8 @@ if __name__ == "__main__":
     # Test tts_to_vs
     tts_test = np.linspace(0, 1, 500)
     vs_test = tts_to_vs(tts_test, dz=1.0)
-    print(f"TTS to Vs conversion test: tts shape={tts_test.shape}, vs shape={vs_test.shape}")
+    print(
+        f"TTS to Vs conversion test: tts shape={tts_test.shape}, vs shape={vs_test.shape}"
+    )
 
     print("All utils tests passed!")

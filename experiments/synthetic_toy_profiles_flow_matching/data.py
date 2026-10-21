@@ -12,100 +12,106 @@ try:
 except ImportError:
     import config
 
-__all__ = ["TravelTimeProfilesDataset", "create_dataloader", "extract_breakpoints", "reconstruct_profile"]
+__all__ = [
+    "TravelTimeProfilesDataset",
+    "create_dataloader",
+    "extract_breakpoints",
+    "reconstruct_profile",
+]
 
 
-def extract_breakpoints(profile: np.ndarray, max_depth: int = 500, apply_log1p: bool = True) -> np.ndarray:
+def extract_breakpoints(
+    profile: np.ndarray, max_depth: int = 500, apply_log1p: bool = True
+) -> np.ndarray:
     """
     Extract breakpoints from a travel time profile.
-    
+
     Returns breakpoints as: [depth1, tts1, tts_end]
     where:
     - depth1: depth of breakpoint (layer1 depth)
     - tts1: travel time at breakpoint (optionally log1p transformed)
     - tts_end: travel time at end (optionally log1p transformed)
-    
+
     The origin (0, 0) is implicit and not included.
-    
+
     Args:
         profile: Array of travel time values (length,)
         max_depth: Maximum depth (default 500)
         apply_log1p: If True, apply log1p transformation to tts values to enforce positivity
-    
+
     Returns:
         Array of shape (3,) with [depth1, tts1, tts_end]
     """
     profile_len = len(profile)
     if profile_len == 0:
         return np.array([max_depth / 2, 0.0, 0.0], dtype=np.float32)
-    
+
     # Find breakpoint by detecting significant change in slope
     # For 2-layer profiles, look for the largest jump in values
     diff = np.abs(np.diff(profile))
-    
+
     if len(diff) > 0:
         # Find the largest jump
         jump_idx = np.argmax(diff)
         boundary_idx = jump_idx + 1
     else:
         boundary_idx = profile_len // 2
-    
+
     # Ensure boundary_idx is valid
     boundary_idx = min(boundary_idx, profile_len - 1)
     boundary_idx = max(boundary_idx, 1)
-    
+
     # Extract values
     depth1 = float(boundary_idx)
     tts1 = float(profile[boundary_idx])
     tts_end = float(profile[-1])
-    
+
     # Apply log1p transformation to travel time values to enforce positivity
     if apply_log1p:
         tts1 = np.log1p(tts1)
         tts_end = np.log1p(tts_end)
-    
+
     return np.array([depth1, tts1, tts_end], dtype=np.float32)
 
 
-def reconstruct_profile(breakpoints: np.ndarray, max_depth: int = 500, apply_expm1: bool = True) -> np.ndarray:
+def reconstruct_profile(
+    breakpoints: np.ndarray, max_depth: int = 500, apply_expm1: bool = True
+) -> np.ndarray:
     """
     Reconstruct a piecewise linear profile from breakpoints.
-    
+
     Args:
         breakpoints: Array of shape (3,) with [depth1, tts1, tts_end]
         max_depth: Maximum depth (default 500)
         apply_expm1: If True, apply expm1 transformation to tts values (inverse of log1p)
-    
+
     Returns:
         Array of shape (max_depth,) with reconstructed profile
     """
     depth1, tts1, tts_end = breakpoints[0], breakpoints[1], breakpoints[2]
-    
+
     # Apply expm1 transformation if breakpoints are in log space
     if apply_expm1:
         tts1 = np.expm1(tts1)
         tts_end = np.expm1(tts_end)
-    
+
     # Clamp depth1 to valid range
     depth1 = max(1, min(depth1, max_depth - 1))
     depth1_int = int(round(depth1))
-    
-    # Create depth array
-    depths = np.arange(max_depth, dtype=np.float32)
-    
+
     # Origin is (0, 0), breakpoint is (depth1, tts1), end is (max_depth-1, tts_end)
     # Piecewise linear interpolation
     profile = np.zeros(max_depth, dtype=np.float32)
-    
+
     # First segment: from (0, 0) to (depth1, tts1)
     if depth1_int > 0:
         profile[:depth1_int] = np.linspace(0.0, tts1, depth1_int)
-    
+
     # Second segment: from (depth1, tts1) to (max_depth-1, tts_end)
     if depth1_int < max_depth:
         remaining_depths = max_depth - depth1_int
         profile[depth1_int:] = np.linspace(tts1, tts_end, remaining_depths)
-    
+
     return profile
 
 
@@ -190,10 +196,10 @@ class TravelTimeProfilesDataset(Dataset):
             # Ensure sequence is at least max_depth length or pad/truncate
             if len(seq) < self.max_depth:
                 # Pad with last value
-                padded = np.pad(seq, (0, self.max_depth - len(seq)), mode='edge')
+                padded = np.pad(seq, (0, self.max_depth - len(seq)), mode="edge")
             else:
-                padded = seq[:self.max_depth]
-            
+                padded = seq[: self.max_depth]
+
             # Extract breakpoints with log1p transformation for tts values
             breakpoints = extract_breakpoints(padded, self.max_depth, apply_log1p=True)
             self.breakpoints.append(breakpoints)
@@ -204,20 +210,20 @@ class TravelTimeProfilesDataset(Dataset):
         self.max_vals = all_breakpoints.max(axis=0)
         self.mean_vals = all_breakpoints.mean(axis=0)
         self.std_vals = all_breakpoints.std(axis=0)
-        
+
         # Avoid division by zero
         self.std_vals = np.where(self.std_vals < 1e-8, 1.0, self.std_vals)
-        
+
         print(f"Extracted {len(self.breakpoints)} breakpoint sets")
-        print(f"Breakpoint ranges (in log1p space, before normalization):")
+        print("Breakpoint ranges (in log1p space, before normalization):")
         print(f"  depth1: [{self.min_vals[0]:.2f}, {self.max_vals[0]:.2f}]")
         print(f"  tts1:   [{self.min_vals[1]:.4f}, {self.max_vals[1]:.4f}] (log1p)")
         print(f"  tts_end: [{self.min_vals[2]:.4f}, {self.max_vals[2]:.4f}] (log1p)")
-        print(f"Breakpoint statistics (for normalization):")
+        print("Breakpoint statistics (for normalization):")
         print(f"  depth1: mean={self.mean_vals[0]:.2f}, std={self.std_vals[0]:.2f}")
         print(f"  tts1:   mean={self.mean_vals[1]:.4f}, std={self.std_vals[1]:.4f}")
         print(f"  tts_end: mean={self.mean_vals[2]:.4f}, std={self.std_vals[2]:.4f}")
-        print(f"Note: Applying z-score normalization to all breakpoint values.")
+        print("Note: Applying z-score normalization to all breakpoint values.")
 
     def __len__(self) -> int:
         return len(self.breakpoints)
@@ -225,31 +231,31 @@ class TravelTimeProfilesDataset(Dataset):
     def __getitem__(self, idx: int) -> torch.Tensor:
         """Returns normalized breakpoints as tensor of shape (3,) with [depth1, tts1, tts_end]"""
         breakpoints = self.breakpoints[idx]
-        
+
         # Apply z-score normalization: (x - mean) / std
         normalized = (breakpoints - self.mean_vals) / self.std_vals
-        
+
         return torch.from_numpy(normalized).float()
 
     def denormalize_batch(self, batch_tensor: torch.Tensor) -> torch.Tensor:
         """Denormalize a batch of breakpoints back to original scale.
-        
-        First reverses z-score normalization, then applies expm1 transformation 
+
+        First reverses z-score normalization, then applies expm1 transformation
         to tts values (inverse of log1p).
         """
         import torch
-        
+
         # Convert to numpy
         batch_np = batch_tensor.detach().cpu().numpy()
-        
+
         # Reverse z-score normalization: x = normalized * std + mean
         batch_np = batch_np * self.std_vals + self.mean_vals
-        
+
         # Apply expm1 to tts values (columns 1 and 2: tts1 and tts_end)
         # Column 0 is depth1, which doesn't need transformation
         batch_np[:, 1] = np.expm1(batch_np[:, 1])  # tts1
         batch_np[:, 2] = np.expm1(batch_np[:, 2])  # tts_end
-        
+
         return torch.from_numpy(batch_np).float()
 
 

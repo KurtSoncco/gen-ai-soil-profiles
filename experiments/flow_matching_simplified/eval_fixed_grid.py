@@ -9,7 +9,10 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from experiments.flow_matching_simplified.data import FlowMatchingDataLoader, FlowMatchingDataset
+from experiments.flow_matching_simplified.data import (
+    FlowMatchingDataLoader,
+    FlowMatchingDataset,
+)
 from experiments.flow_matching_simplified.eval_corrected import (
     TREND_DEPTHS_M,
     bound_rate,
@@ -31,9 +34,27 @@ from experiments.flow_matching_simplified.run_corrected_eval import (
 from experiments.flow_matching_simplified.train_fixed_grid import OUT, GridFlow
 
 ROOT = Path(__file__).resolve().parents[2]
-DATA = ROOT / "experiments" / "flow_matching_simplified" / "data" / "breakpoints_onewaytime.parquet"
-SPLIT = ROOT / "outputs" / "flow_matching_simplified" / "results" / "split_indices_seed42.json"
-RESULT = ROOT / "outputs" / "flow_matching_simplified" / "results" / "stage6_fixed_grid_eval.json"
+DATA = (
+    ROOT
+    / "experiments"
+    / "flow_matching_simplified"
+    / "data"
+    / "breakpoints_onewaytime.parquet"
+)
+SPLIT = (
+    ROOT
+    / "outputs"
+    / "flow_matching_simplified"
+    / "results"
+    / "split_indices_seed42.json"
+)
+RESULT = (
+    ROOT
+    / "outputs"
+    / "flow_matching_simplified"
+    / "results"
+    / "stage6_fixed_grid_eval.json"
+)
 
 
 def _boundaries(sequence: np.ndarray) -> np.ndarray:
@@ -74,7 +95,9 @@ def _sample(model, scale, train_raw, fit, n, seed, device, oracle_raw=None):
             index = int(rng.integers(0, len(train_raw)))
             template = train_raw[index]
             edge = _boundaries(template)
-            ln, valid, n_out, n_kn = draw_trend_knots(fit, float(edge[-1]), rng, clip=True)
+            ln, valid, n_out, n_kn = draw_trend_knots(
+                fit, float(edge[-1]), rng, clip=True
+            )
             outside += n_out
             total += n_kn
         else:
@@ -86,7 +109,9 @@ def _sample(model, scale, train_raw, fit, n, seed, device, oracle_raw=None):
         bounds.append(edge)
     physical = torch.tensor(np.stack(fields), dtype=torch.float32, device=device)
     mask = torch.tensor(np.stack(masks), dtype=torch.float32, device=device)
-    standard = torch.where(mask.bool(), (physical - mu) / sig, torch.zeros_like(physical))
+    standard = torch.where(
+        mask.bool(), (physical - mu) / sig, torch.zeros_like(physical)
+    )
     eps = torch.randn(standard.shape, generator=generator).to(device)
     x0 = ((1.0 - ALPHA) * standard + ALPHA * eps) * mask
     sequences = {}
@@ -116,7 +141,10 @@ def main() -> None:
     test_raw = [loader.sequences[i] for i in split["test"]]
     fit = fit_trend(train_raw)
     test_ds = FlowMatchingDataset(test_raw, max_length=20, normalize=True)
-    real = [test_ds.denormalize_sequence(test_ds.sequences[i], i) for i in range(len(test_raw))]
+    real = [
+        test_ds.denormalize_sequence(test_ds.sequences[i], i)
+        for i in range(len(test_raw))
+    ]
     real_boot = bootstrap_vertical(real, n_boot=N_BOOT, seed=42)
     n_knots = len(TREND_DEPTHS_M)
     results = {
@@ -127,7 +155,9 @@ def main() -> None:
         "seeds": {},
     }
     for seed in (42, 43, 44):
-        ckpt = torch.load(OUT / f"grid_s{seed}.pt", map_location=device, weights_only=False)
+        ckpt = torch.load(
+            OUT / f"grid_s{seed}.pt", map_location=device, weights_only=False
+        )
         model = GridFlow(n_knots).to(device)
         model.load_state_dict(ckpt["model"])
         model.eval()

@@ -8,7 +8,6 @@ correlation structure.
 import argparse
 import json
 import os
-import random
 import sys
 from pathlib import Path
 
@@ -40,7 +39,6 @@ try:
         sample_sequences,
         save_checkpoint,
         set_seed,
-        train_epoch,
     )
     from experiments.flow_matching_simplified.utils import compute_vs_penalty
     from experiments.flow_matching_simplified.depth_dependent_stats import (
@@ -62,7 +60,6 @@ except ImportError:
         sample_sequences,
         save_checkpoint,
         set_seed,
-        train_epoch,
     )  # type: ignore
     from utils import compute_vs_penalty  # type: ignore
     from depth_dependent_stats import (
@@ -92,7 +89,7 @@ def compute_flow_matching_loss_with_depth(
 ) -> tuple[torch.Tensor, dict]:
     """
     Compute flow matching loss with optional depth-aware regularization.
-    
+
     Args:
         model: Transformer model
         u1: Real data sequences (batch_size, max_length, 2)
@@ -104,7 +101,7 @@ def compute_flow_matching_loss_with_depth(
         target_std_ln_vs: Optional target std ln(Vs) per depth bin
         target_correlations: Optional target correlations {lag: expected_corr}
         bin_edges: Optional depth bin edges
-    
+
     Returns:
         Tuple of (total_loss, loss_dict)
     """
@@ -151,7 +148,9 @@ def compute_flow_matching_loss_with_depth(
             config.min_dt,
             normalize=config.normalize,
         )
-        reconstruction_loss = reconstruction_loss + config.vs_penalty_weight * vs_penalty
+        reconstruction_loss = (
+            reconstruction_loss + config.vs_penalty_weight * vs_penalty
+        )
 
     # Initialize loss dict
     loss_dict = {
@@ -227,7 +226,7 @@ def train_epoch_with_depth_losses(
 ) -> float:
     """
     Train for one epoch with depth-aware losses.
-    
+
     Args:
         model: Transformer model
         train_loader: Training data loader
@@ -241,7 +240,7 @@ def train_epoch_with_depth_losses(
         bin_edges: Depth bin edges
         wandb_run: Optional wandb run object
         epoch: Current epoch number
-    
+
     Returns:
         Average training loss
     """
@@ -379,10 +378,14 @@ def main() -> None:
             target_correlations = correlations["mean_correlations"]
 
         print("Target statistics loaded successfully")
-        print(f"  Bin edges: {len(bin_edges)-1} bins")
-        print(f"  Correlation lags: {list(target_correlations.keys()) if target_correlations else 'None'}")
+        print(f"  Bin edges: {len(bin_edges) - 1} bins")
+        print(
+            f"  Correlation lags: {list(target_correlations.keys()) if target_correlations else 'None'}"
+        )
     else:
-        print("Warning: No target statistics provided. Depth-aware losses will be disabled.")
+        print(
+            "Warning: No target statistics provided. Depth-aware losses will be disabled."
+        )
         cfg.use_depth_stats_loss = False
         cfg.use_vertical_corr_loss = False
 
@@ -476,9 +479,7 @@ def main() -> None:
         attach_projections(
             train_dataset, [data_loader.sequences[i] for i in train_indices]
         )
-        attach_projections(
-            val_dataset, [data_loader.sequences[i] for i in val_indices]
-        )
+        attach_projections(val_dataset, [data_loader.sequences[i] for i in val_indices])
         attach_projections(test_dataset, test_sequences)
         projection_report = knot_outside_fraction(
             [data_loader.sequences[i] for i in train_indices]
@@ -560,8 +561,12 @@ def main() -> None:
     val_losses = []
 
     print("Starting training...")
-    print(f"  Depth stats loss: {'enabled' if cfg.use_depth_stats_loss else 'disabled'}")
-    print(f"  Vertical corr loss: {'enabled' if cfg.use_vertical_corr_loss else 'disabled'}")
+    print(
+        f"  Depth stats loss: {'enabled' if cfg.use_depth_stats_loss else 'disabled'}"
+    )
+    print(
+        f"  Vertical corr loss: {'enabled' if cfg.use_vertical_corr_loss else 'disabled'}"
+    )
 
     for epoch in range(cfg.num_epochs):
         # Train with depth-aware losses
@@ -670,4 +675,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

@@ -22,7 +22,10 @@ from experiments.flow_matching_simplified.baseline_metrics import (
     euler_integrate,
 )
 from experiments.flow_matching_simplified.comprehensive_eval import load_checkpoint
-from experiments.flow_matching_simplified.data import FlowMatchingDataLoader, FlowMatchingDataset
+from experiments.flow_matching_simplified.data import (
+    FlowMatchingDataLoader,
+    FlowMatchingDataset,
+)
 from experiments.flow_matching_simplified.depth_dependent_stats.losses import (
     compute_vertical_correlation_loss,
 )
@@ -42,8 +45,20 @@ from experiments.flow_matching_simplified.projection import (
 )
 
 ROOT = Path(__file__).resolve().parents[2]
-DATA = ROOT / "experiments" / "flow_matching_simplified" / "data" / "breakpoints_onewaytime.parquet"
-SPLIT = ROOT / "outputs" / "flow_matching_simplified" / "results" / "split_indices_seed42.json"
+DATA = (
+    ROOT
+    / "experiments"
+    / "flow_matching_simplified"
+    / "data"
+    / "breakpoints_onewaytime.parquet"
+)
+SPLIT = (
+    ROOT
+    / "outputs"
+    / "flow_matching_simplified"
+    / "results"
+    / "split_indices_seed42.json"
+)
 CORR = (
     ROOT
     / "experiments"
@@ -77,7 +92,11 @@ def _layer_rows(sequence: np.ndarray) -> list[dict]:
                     "z0": float(a),
                     "z1": float(b),
                     "vs": float(v) if np.isfinite(v) else None,
-                    "side": "low" if np.isfinite(v) and v < VS_MIN else "high" if np.isfinite(v) else "nonfinite",
+                    "side": "low"
+                    if np.isfinite(v) and v < VS_MIN
+                    else "high"
+                    if np.isfinite(v)
+                    else "nonfinite",
                 }
             )
     return rows
@@ -113,9 +132,7 @@ def catalog_training(train_raw: list[np.ndarray]) -> dict:
                 raw_layers.append({"train_row": index, **layer})
     shallow = sum(1 for row in raw_layers if row["z1"] <= 10.0)
     on_knot = sum(
-        1
-        for row in raw_layers
-        if any(row["z0"] < z <= row["z1"] for z in KNOTS)
+        1 for row in raw_layers if any(row["z0"] < z <= row["z1"] for z in KNOTS)
     )
     depth_counts: dict[str, int] = {}
     for knot in knots:
@@ -194,7 +211,14 @@ def correlation_check(train_raw: list[np.ndarray]) -> dict:
         tokens_i[0, :length_i] = torch.as_tensor(norm[:length_i])
         mask_i[0, :length_i] = True
         stats_i = torch.tensor(
-            [[stats["ts_mean"], stats["ts_std"], stats["depth_mean"], stats["depth_std"]]],
+            [
+                [
+                    stats["ts_mean"],
+                    stats["ts_std"],
+                    stats["depth_mean"],
+                    stats["depth_std"],
+                ]
+            ],
             dtype=torch.float32,
         )
         value = compute_vertical_correlation_loss(
@@ -248,11 +272,17 @@ def sample_violations(train_raw, train_stats, fit) -> dict:
     max_length = cfg_mod.cfg.max_length
     seeds = {}
     for seed in (42, 43, 44):
-        model, epoch = load_checkpoint(str(NAMED / f"latest_trend_s{seed}.pt"), device, cfg_mod.cfg)
+        model, epoch = load_checkpoint(
+            str(NAMED / f"latest_trend_s{seed}.pt"), device, cfg_mod.cfg
+        )
         model.eval()
-        pack, report = _trend_batch(train_raw, train_stats, fit, 200, seed, max_length, device)
+        pack, report = _trend_batch(
+            train_raw, train_stats, fit, 200, seed, max_length, device
+        )
         u0, masks, stats, stats_list, lengths = pack
-        gen = _denorm_generated(euler_integrate(model, u0, masks, stats, 50), lengths, stats_list)
+        gen = _denorm_generated(
+            euler_integrate(model, u0, masks, stats, 50), lengths, stats_list
+        )
         violations = []
         n_layers = 0
         for profile_i, seq in enumerate(gen):
@@ -269,7 +299,6 @@ def sample_violations(train_raw, train_stats, fit) -> dict:
                     by_depth[str(int(z))] += 1
                     covered = True
             n_cover += int(covered)
-        vs_vals = [row["vs"] for row in violations if row["vs"] is not None]
         seeds[str(seed)] = {
             "epoch_index": int(epoch),
             "device": str(device),
@@ -281,11 +310,15 @@ def sample_violations(train_raw, train_stats, fit) -> dict:
             "n_low": int(sum(row["side"] == "low" for row in violations)),
             "n_high": int(sum(row["side"] == "high" for row in violations)),
             "n_nonfinite": int(sum(row["side"] == "nonfinite" for row in violations)),
-            "n_outside_ending_by_10m": int(sum(row["z1"] <= 10.0 for row in violations)),
+            "n_outside_ending_by_10m": int(
+                sum(row["z1"] <= 10.0 for row in violations)
+            ),
             "n_outside_covering_any_knot": n_cover,
             "violations_covering_knot": by_depth,
             "clip_report": report,
-            "median_outside_vs": float(np.median([row["vs"] for row in violations if row["vs"] is not None]))
+            "median_outside_vs": float(
+                np.median([row["vs"] for row in violations if row["vs"] is not None])
+            )
             if any(row["vs"] is not None for row in violations)
             else None,
         }
@@ -306,7 +339,9 @@ def main() -> None:
     loader.load_data()
     assert loader.sequences is not None
     train_raw = [loader.sequences[i] for i in split["train"]]
-    train_stats = FlowMatchingDataset(train_raw, max_length=cfg_mod.cfg.max_length, normalize=True).sequence_stats
+    train_stats = FlowMatchingDataset(
+        train_raw, max_length=cfg_mod.cfg.max_length, normalize=True
+    ).sequence_stats
     catalog = catalog_training(train_raw)
     print(
         f"projected outside {catalog['n_projected_knots_outside']} "
@@ -320,12 +355,22 @@ def main() -> None:
     payload = {
         "split": str(SPLIT),
         "train_index_sum": int(sum(split["train"])),
-        "training": {k: v for k, v in catalog.items() if k not in ("projected_knots", "raw_layers_outside")},
+        "training": {
+            k: v
+            for k, v in catalog.items()
+            if k not in ("projected_knots", "raw_layers_outside")
+        },
         "projected_knots": catalog["projected_knots"],
         "raw_layer_summary": {
-            "n_low": int(sum(row["side"] == "low" for row in catalog["raw_layers_outside"])),
-            "n_high": int(sum(row["side"] == "high" for row in catalog["raw_layers_outside"])),
-            "depths_m": sorted({round(row["z0"], 1) for row in catalog["raw_layers_outside"]}),
+            "n_low": int(
+                sum(row["side"] == "low" for row in catalog["raw_layers_outside"])
+            ),
+            "n_high": int(
+                sum(row["side"] == "high" for row in catalog["raw_layers_outside"])
+            ),
+            "depths_m": sorted(
+                {round(row["z0"], 1) for row in catalog["raw_layers_outside"]}
+            ),
         },
         "correlation": corr,
         "sampler": sampled,

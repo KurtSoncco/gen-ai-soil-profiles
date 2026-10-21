@@ -8,7 +8,6 @@ Passeri one-way travel time is ``tts = Σ h / Vs``, so the inversion is
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 
 import numpy as np
@@ -40,7 +39,9 @@ def travel_time_from_vs(depths: np.ndarray, vs: np.ndarray) -> np.ndarray:
     return np.column_stack([tts, depths[1:]])
 
 
-def vs_from_travel_time(sequence: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def vs_from_travel_time(
+    sequence: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Invert a ``[tts, depth]`` sequence with ``Vs = Δz / Δt``.
 
     Returns layer-start depths, layer-end depths, and Vs.
@@ -77,7 +78,9 @@ def _layer_index_at(boundaries: np.ndarray, z: np.ndarray) -> np.ndarray:
     return idx
 
 
-def lag_pairs(sequence: np.ndarray, lag_m: float, step_m: float = PAIR_STEP_M) -> dict[str, np.ndarray]:
+def lag_pairs(
+    sequence: np.ndarray, lag_m: float, step_m: float = PAIR_STEP_M
+) -> dict[str, np.ndarray]:
     """Pairs ``(z, z+lag)`` on a fixed depth grid inside one piecewise-constant profile.
 
     Vs is the Passeri inversion ``Δz / Δt``. Pairs in a profile whose depth is not
@@ -173,14 +176,14 @@ def bootstrap_vertical(
     rng = np.random.default_rng(seed)
     n = len(sequences)
     point = vertical_structure(sequences, lags)
-    bags = {
-        lag: {"same": [], "corr": []} for lag in lags
-    }
+    bags = {lag: {"same": [], "corr": []} for lag in lags}
     pair_cache = {lag: [lag_pairs(seq, lag) for seq in sequences] for lag in lags}
     for _ in range(n_boot):
         draw = rng.integers(0, n, size=n)
         for lag in lags:
-            chosen = [pair_cache[lag][i] for i in draw if len(pair_cache[lag][i]["ln0"])]
+            chosen = [
+                pair_cache[lag][i] for i in draw if len(pair_cache[lag][i]["ln0"])
+            ]
             if not chosen:
                 bags[lag]["same"].append(np.nan)
                 bags[lag]["corr"].append(np.nan)
@@ -206,7 +209,9 @@ def bootstrap_vertical(
     return result
 
 
-def ln_vs_matrix(sequences: list[np.ndarray], depths: np.ndarray = TREND_DEPTHS_M) -> np.ndarray:
+def ln_vs_matrix(
+    sequences: list[np.ndarray], depths: np.ndarray = TREND_DEPTHS_M
+) -> np.ndarray:
     """``ln(Vs)`` from ``Vs = Δz / Δt`` at fixed depths. NaN if the profile stops short."""
     mat = np.full((len(sequences), len(depths)), np.nan)
     for i, seq in enumerate(sequences):

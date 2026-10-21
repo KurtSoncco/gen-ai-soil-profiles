@@ -20,8 +20,20 @@ from experiments.flow_matching_simplified.depth_dependent_stats.train_with_depth
 )
 
 ROOT = Path(__file__).resolve().parents[2]
-SPLIT = ROOT / "outputs" / "flow_matching_simplified" / "results" / "split_indices_seed42.json"
-DATA = ROOT / "experiments" / "flow_matching_simplified" / "data" / "breakpoints_onewaytime.parquet"
+SPLIT = (
+    ROOT
+    / "outputs"
+    / "flow_matching_simplified"
+    / "results"
+    / "split_indices_seed42.json"
+)
+DATA = (
+    ROOT
+    / "experiments"
+    / "flow_matching_simplified"
+    / "data"
+    / "breakpoints_onewaytime.parquet"
+)
 STATS = (
     ROOT
     / "experiments"
@@ -50,7 +62,13 @@ def launch(seed: int, epochs: int = 1000, output_dir: Path | None = None) -> Non
     cfg.data_path = str(DATA)
     out = output_dir or (ROOT / "outputs" / f"flow_matching_simplified_trend_s{seed}")
     cfg.output_dir = str(out)
-    sys.argv = ["train_trend_prior", "--target-stats", str(STATS), "--target-corr", str(CORR)]
+    sys.argv = [
+        "train_trend_prior",
+        "--target-stats",
+        str(STATS),
+        "--target-corr",
+        str(CORR),
+    ]
     t0 = time.perf_counter()
     main()
     elapsed = time.perf_counter() - t0

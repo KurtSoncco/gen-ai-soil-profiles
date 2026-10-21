@@ -19,8 +19,14 @@ from experiments.flow_matching_simplified.baseline_metrics import (
     euler_integrate,
 )
 from experiments.flow_matching_simplified.comprehensive_eval import load_checkpoint
-from experiments.flow_matching_simplified.data import FlowMatchingDataLoader, FlowMatchingDataset
-from experiments.flow_matching_simplified.eval_corrected import bound_rate, bootstrap_vertical
+from experiments.flow_matching_simplified.data import (
+    FlowMatchingDataLoader,
+    FlowMatchingDataset,
+)
+from experiments.flow_matching_simplified.eval_corrected import (
+    bound_rate,
+    bootstrap_vertical,
+)
 from experiments.flow_matching_simplified.projection import (
     ALPHA,
     fit_trend,
@@ -40,10 +46,24 @@ from experiments.flow_matching_simplified.run_corrected_eval import (
 )
 
 ROOT = Path(__file__).resolve().parents[2]
-DATA = ROOT / "experiments" / "flow_matching_simplified" / "data" / "breakpoints_onewaytime.parquet"
-SPLIT = ROOT / "outputs" / "flow_matching_simplified" / "results" / "split_indices_seed42.json"
+DATA = (
+    ROOT
+    / "experiments"
+    / "flow_matching_simplified"
+    / "data"
+    / "breakpoints_onewaytime.parquet"
+)
+SPLIT = (
+    ROOT
+    / "outputs"
+    / "flow_matching_simplified"
+    / "results"
+    / "split_indices_seed42.json"
+)
 NAMED = ROOT / "outputs" / "flow_matching_simplified" / "checkpoints"
-OUT = ROOT / "outputs" / "flow_matching_simplified" / "results" / "stage6_trend_eval.json"
+OUT = (
+    ROOT / "outputs" / "flow_matching_simplified" / "results" / "stage6_trend_eval.json"
+)
 
 
 def _boundaries(sequence: np.ndarray) -> np.ndarray:
@@ -88,7 +108,9 @@ def _trend_batch(train_raw, train_stats, fit, n, seed, max_length, device):
     for _ in range(n):
         index = int(rng.integers(0, len(train_raw)))
         bounds = _boundaries(train_raw[index])
-        ln, valid, n_out, n_kn = draw_trend_knots(fit, float(bounds[-1]), rng, clip=True)
+        ln, valid, n_out, n_kn = draw_trend_knots(
+            fit, float(bounds[-1]), rng, clip=True
+        )
         outside += n_out
         total += n_kn
         tokens.append(tokens_from_knots(bounds, ln, valid))
@@ -160,7 +182,9 @@ def main() -> None:
     fit = fit_trend(train_raw)
     train_bounds = knot_outside_fraction(train_raw)
     real = []
-    test_ds = FlowMatchingDataset(test_raw, max_length=cfg_mod.cfg.max_length, normalize=True)
+    test_ds = FlowMatchingDataset(
+        test_raw, max_length=cfg_mod.cfg.max_length, normalize=True
+    )
     for i in range(len(test_raw)):
         real.append(test_ds.denormalize_sequence(test_ds.sequences[i], i))
     real_boot = bootstrap_vertical(real, n_boot=N_BOOT, seed=42)
@@ -208,7 +232,13 @@ def main() -> None:
                 cond["curvature"] = _curvature(
                     model,
                     lambda n, cursor: _trend_batch(
-                        train_raw, train_stats, fit, n, seed + 1000 + cursor, max_length, device
+                        train_raw,
+                        train_stats,
+                        fit,
+                        n,
+                        seed + 1000 + cursor,
+                        max_length,
+                        device,
                     )[0],
                     device,
                 )
@@ -224,7 +254,9 @@ def main() -> None:
                     ),
                     device,
                 )
-            print(f"  curvature {name} {cond['curvature']['curvature']:.4f}", flush=True)
+            print(
+                f"  curvature {name} {cond['curvature']['curvature']:.4f}", flush=True
+            )
             block["conditions"][name] = cond
         results["seeds"][str(seed)] = block
         OUT.write_text(json.dumps(results, indent=2) + "\n")

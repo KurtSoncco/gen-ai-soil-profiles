@@ -93,7 +93,9 @@ def _layer_vs(seq: np.ndarray, passeri: bool) -> tuple[np.ndarray, np.ndarray]:
     return centers[ok], vs[ok]
 
 
-def _bin_stats(sequences: list[np.ndarray], passeri: bool) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def _bin_stats(
+    sequences: list[np.ndarray], passeri: bool
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     depths: list[float] = []
     vs: list[float] = []
     for seq in sequences:
@@ -116,7 +118,9 @@ def _rmse(a: np.ndarray, b: np.ndarray, mask: np.ndarray) -> float:
     return float(np.sqrt(np.mean((a[mask] - b[mask]) ** 2)))
 
 
-def _mean_corr(sequences: list[np.ndarray], passeri: bool, lags: tuple[float, ...]) -> dict[str, float]:
+def _mean_corr(
+    sequences: list[np.ndarray], passeri: bool, lags: tuple[float, ...]
+) -> dict[str, float]:
     acc = {lag: [] for lag in lags}
     for seq in sequences:
         c, v = _layer_vs(seq, passeri=passeri)
@@ -187,7 +191,9 @@ def metric_bundle(
     out["breakpoint_count_ks"] = _ks(
         compute_breakpoint_count(real), compute_breakpoint_count(generated)
     )
-    out["final_depth_ks"] = _ks(compute_final_depth(real), compute_final_depth(generated))
+    out["final_depth_ks"] = _ks(
+        compute_final_depth(real), compute_final_depth(generated)
+    )
     out["total_tts_ks"] = _ks(compute_total_tts(real), compute_total_tts(generated))
     real_depths = np.concatenate([seq[:, 1] for seq in real if len(seq)])
     gen_depths = np.concatenate([seq[:, 1] for seq in generated if len(seq)])
@@ -196,7 +202,12 @@ def metric_bundle(
     for name, passeri in (("code_inversion", False), ("passeri", True)):
         r_mean, r_std, r_count = _bin_stats(real, passeri=passeri)
         g_mean, g_std, _g_count = _bin_stats(generated, passeri=passeri)
-        mask = np.isfinite(r_mean) & np.isfinite(g_mean) & np.isfinite(r_std) & np.isfinite(g_std)
+        mask = (
+            np.isfinite(r_mean)
+            & np.isfinite(g_mean)
+            & np.isfinite(r_std)
+            & np.isfinite(g_std)
+        )
         mask_train = mask & (r_count >= 50)
         bounds = check_vs_constraints(
             [
@@ -204,9 +215,7 @@ def metric_bundle(
                 for seq in generated
             ]
         )
-        real_vs = np.concatenate(
-            [_layer_vs(seq, passeri=passeri)[1] for seq in real]
-        )
+        real_vs = np.concatenate([_layer_vs(seq, passeri=passeri)[1] for seq in real])
         gen_vs = np.concatenate(
             [_layer_vs(seq, passeri=passeri)[1] for seq in generated]
         )
@@ -253,7 +262,9 @@ def _initial_state(
     train_lengths = [len(seq) for seq in dataset.sequences]
     sampled_lengths = np.random.choice(train_lengths, size=num_samples, replace=True)
     u = torch.randn(num_samples, max_length, 2, device=device)
-    attention_masks = torch.zeros(num_samples, max_length, dtype=torch.bool, device=device)
+    attention_masks = torch.zeros(
+        num_samples, max_length, dtype=torch.bool, device=device
+    )
     sequence_stats_list = []
     for i, seq_len in enumerate(sampled_lengths):
         attention_masks[i, : int(seq_len)] = True
@@ -331,7 +342,9 @@ def curvature(
     return float(np.mean(acc))
 
 
-def _fit_bins(train_seqs: list[np.ndarray]) -> tuple[np.ndarray, np.ndarray, np.ndarray, float]:
+def _fit_bins(
+    train_seqs: list[np.ndarray],
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, float]:
     centers_all = []
     ln_all = []
     for seq in train_seqs:
@@ -432,7 +445,9 @@ def main() -> None:
         "epoch": int(epoch),
         "device": str(device),
         "torch": torch.__version__,
-        "split_source": str(split_path if split_path.is_file() else "recomputed set_seed(42)"),
+        "split_source": str(
+            split_path if split_path.is_file() else "recomputed set_seed(42)"
+        ),
         "n_train": len(split["train"]),
         "n_test": len(split["test"]),
         "sweeps": {},

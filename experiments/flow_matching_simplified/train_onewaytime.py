@@ -27,7 +27,11 @@ def launch() -> None:
     cfg = cfg_mod.cfg
     cfg.seed = 42
     cfg.data_path = str(
-        ROOT / "experiments" / "flow_matching_simplified" / "data" / "breakpoints_onewaytime.parquet"
+        ROOT
+        / "experiments"
+        / "flow_matching_simplified"
+        / "data"
+        / "breakpoints_onewaytime.parquet"
     )
     cfg.output_dir = str(OUT)
     sys.argv = [

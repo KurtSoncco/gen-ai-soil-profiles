@@ -50,7 +50,7 @@ def evaluate_depth_statistics(
     output_dir: str = None,
 ) -> dict:
     """Evaluate depth-dependent statistics match.
-    
+
     Args:
         generated_sequences: List of generated [TTS, depth] sequences
         target_stats: Target depth statistics dictionary
@@ -59,7 +59,7 @@ def evaluate_depth_statistics(
         max_depth: Maximum depth to consider
         correlation_lags: List of depth lags for correlation computation
         output_dir: Output directory for plots
-    
+
     Returns:
         Dictionary with evaluation metrics
     """
@@ -102,7 +102,9 @@ def evaluate_depth_statistics(
     all_depths_gen = np.array(all_depths_gen)
     all_vs_gen = np.array(all_vs_gen)
 
-    print(f"Extracted {len(all_vs_gen)} Vs values from {len(generated_sequences)} profiles")
+    print(
+        f"Extracted {len(all_vs_gen)} Vs values from {len(generated_sequences)} profiles"
+    )
 
     # Bin by depth
     bin_centers_gen, mean_ln_vs_gen, std_ln_vs_gen, bin_counts_gen = bin_by_depth(
@@ -128,13 +130,20 @@ def evaluate_depth_statistics(
     if valid_bins.sum() > 0:
         mean_mismatch = np.sqrt(
             (
-                (target_stats["mean_ln_vs"][valid_bins] - gen_stats["mean_ln_vs"][valid_bins])
+                (
+                    target_stats["mean_ln_vs"][valid_bins]
+                    - gen_stats["mean_ln_vs"][valid_bins]
+                )
                 ** 2
             ).mean()
         )
         std_mismatch = np.sqrt(
             (
-                (target_stats["std_ln_vs"][valid_bins] - gen_stats["std_ln_vs"][valid_bins]) ** 2
+                (
+                    target_stats["std_ln_vs"][valid_bins]
+                    - gen_stats["std_ln_vs"][valid_bins]
+                )
+                ** 2
             ).mean()
         )
     else:
@@ -149,6 +158,7 @@ def evaluate_depth_statistics(
     gen_corrs = None
     if target_corrs is not None:
         print("\nComputing generated vertical correlations...")
+
         # Create a simple dataset-like object for compatibility
         class SimpleDataset:
             def __init__(self, sequences):
@@ -169,7 +179,9 @@ def evaluate_depth_statistics(
             target_mean = target_corrs["mean_correlations"][lag]
             gen_mean = gen_corrs["mean_correlations"][lag]
             diff = abs(target_mean - gen_mean)
-            print(f"  Lag {lag:4.1f}m: target={target_mean:6.4f}, gen={gen_mean:6.4f}, diff={diff:6.4f}")
+            print(
+                f"  Lag {lag:4.1f}m: target={target_mean:6.4f}, gen={gen_mean:6.4f}, diff={diff:6.4f}"
+            )
 
     # Create comparison plots
     if output_dir is not None:
@@ -188,7 +200,9 @@ def evaluate_depth_statistics(
 
     # Compile results
     results = {
-        "mean_ln_vs_rmse": float(mean_mismatch) if not np.isnan(mean_mismatch) else None,
+        "mean_ln_vs_rmse": float(mean_mismatch)
+        if not np.isnan(mean_mismatch)
+        else None,
         "std_ln_vs_rmse": float(std_mismatch) if not np.isnan(std_mismatch) else None,
         "n_generated_profiles": len(generated_sequences),
         "n_vs_samples": len(all_vs_gen),
@@ -199,7 +213,9 @@ def evaluate_depth_statistics(
         for lag in sorted(target_corrs["mean_correlations"].keys()):
             target_mean = target_corrs["mean_correlations"][lag]
             gen_mean = gen_corrs["mean_correlations"][lag]
-            results["correlation_errors"][f"lag_{lag}m"] = float(abs(target_mean - gen_mean))
+            results["correlation_errors"][f"lag_{lag}m"] = float(
+                abs(target_mean - gen_mean)
+            )
 
     return results
 
@@ -277,7 +293,9 @@ def main():
 
     # Load target statistics
     print(f"Loading target statistics from {args.target_stats}...")
-    target_stats, target_corrs = load_target_statistics(args.target_stats, args.target_corr)
+    target_stats, target_corrs = load_target_statistics(
+        args.target_stats, args.target_corr
+    )
 
     if args.target_corr is not None:
         print(f"Loaded target correlations from {args.target_corr}")
@@ -312,4 +330,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

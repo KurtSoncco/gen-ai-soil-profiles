@@ -30,7 +30,10 @@ from experiments.flow_matching_simplified.comprehensive_eval import (
     compute_pairwise_distance,
     load_checkpoint,
 )
-from experiments.flow_matching_simplified.data import FlowMatchingDataLoader, FlowMatchingDataset
+from experiments.flow_matching_simplified.data import (
+    FlowMatchingDataLoader,
+    FlowMatchingDataset,
+)
 from experiments.flow_matching_simplified.eval_corrected import (
     bound_rate,
     bootstrap_vertical,
@@ -119,18 +122,20 @@ def _score_set(real, generated, real_boot, histogram_lengths) -> dict:
         histogram_match = None
     else:
         histogram_match = bool(
-            np.array_equal(counts.astype(int), np.asarray(histogram_lengths).astype(int))
+            np.array_equal(
+                counts.astype(int), np.asarray(histogram_lengths).astype(int)
+            )
         )
     return {
         "depth_monotonicity": check_monotonicity(generated)["monotonic_rate"],
         "bound_rate": bound_rate(generated),
         "final_depth_mean": float(np.mean(compute_final_depth(generated))),
-        "final_depth_ks": _ks(compute_final_depth(real), compute_final_depth(generated)),
+        "final_depth_ks": _ks(
+            compute_final_depth(real), compute_final_depth(generated)
+        ),
         "vs_ks": _vs_ks(real, generated),
         "breakpoint_depth_ks": _depth_ks(real, generated),
-        "breakpoint_count_ks": _ks(
-            compute_breakpoint_count(real), counts
-        ),
+        "breakpoint_count_ks": _ks(compute_breakpoint_count(real), counts),
         "breakpoint_count_equals_histogram_draw": histogram_match,
         "pairwise_distance_generated": _pairwise(generated),
         "depth_trend": depth_trend_error(real, generated, n_boot=N_BOOT, seed=SEED),
@@ -218,13 +223,19 @@ def main() -> None:
     args = parser.parse_args()
     cfg = cfg_mod.cfg
     bp_path = Path(args.breakpoints) if args.breakpoints else Path(cfg.data_path)
-    ckpt_dir = Path(args.checkpoint_dir) if args.checkpoint_dir else Path(cfg.checkpoints_dir)
+    ckpt_dir = (
+        Path(args.checkpoint_dir) if args.checkpoint_dir else Path(cfg.checkpoints_dir)
+    )
     split_path = (
         Path(args.split)
         if args.split
         else Path(cfg.results_dir, "split_indices_seed42.json")
     )
-    out = Path(args.output) if args.output else Path(cfg.results_dir) / "corrected_eval.json"
+    out = (
+        Path(args.output)
+        if args.output
+        else Path(cfg.results_dir) / "corrected_eval.json"
+    )
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     tts = pd.read_parquet(Path(args.tts))
     bp = pd.read_parquet(bp_path)
@@ -264,7 +275,9 @@ def main() -> None:
             "pairwise_distance": real_distance,
             "final_depth_mean": float(np.mean(compute_final_depth(real))),
             "vertical": real_vert,
-            "depth_trend_n_real": depth_trend_error(real, real, n_boot=20, seed=SEED)["n_real"],
+            "depth_trend_n_real": depth_trend_error(real, real, n_boot=20, seed=SEED)[
+                "n_real"
+            ],
         },
         "checkpoints": {},
     }
@@ -284,7 +297,9 @@ def main() -> None:
                 if kind == "euler":
                     u = euler_integrate(model, u0, masks, stats, steps)
                 else:
-                    u = sample_sequences_ode(model, u0.clone(), masks, stats, steps, device)
+                    u = sample_sequences_ode(
+                        model, u0.clone(), masks, stats, steps, device
+                    )
                 gen = _denorm_generated(u, lengths, stats_list)
                 scored = _score_set(real, gen, real_vert, lengths)
                 scored["seconds"] = time.perf_counter() - t0

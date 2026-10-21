@@ -68,7 +68,7 @@ class PositionalEncoding(nn.Module):
 
 class DepthConvBlock(nn.Module):
     """Shallow 1D conv along depth to encourage vertical coherence.
-    
+
     This module applies a 1D convolution along the sequence (depth) dimension
     to encourage smoothness and improve short-lag correlations (1-2m).
     Uses a residual connection to preserve original features.
@@ -105,10 +105,10 @@ class DepthConvBlock(nn.Module):
         x_in = x.transpose(1, 2)  # (B, d_model, seq_len)
         x_conv = self.conv(x_in)  # (B, d_model, seq_len)
         x_conv = x_conv.transpose(1, 2)  # Back to (B, seq_len, d_model)
-        
+
         # Residual connection + activation + dropout
         x_out = x + self.dropout(self.act(x_conv))
-        
+
         # Layer normalization
         return self.norm(x_out)
 

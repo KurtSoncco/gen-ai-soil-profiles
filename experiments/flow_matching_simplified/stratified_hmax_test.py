@@ -82,7 +82,9 @@ def profile_physics(seq: np.ndarray) -> dict:
     tts_mono = bool(np.all(dt > 1e-9))
     depth_mono = bool(np.all(dz > 1e-9))
     nonneg = bool(np.all(tts >= -1e-12) and np.all(z >= -1e-12))
-    vs_ok = bool(len(vs) and np.all(np.isfinite(vs)) and np.all((vs >= VS_MIN) & (vs <= VS_MAX)))
+    vs_ok = bool(
+        len(vs) and np.all(np.isfinite(vs)) and np.all((vs >= VS_MIN) & (vs <= VS_MAX))
+    )
     thick_ok = bool(np.all(dz >= MIN_THICK - 1e-9))
     h_ok = bool(H_MIN - 1e-9 <= h <= H_MAX + 1e-9)
     vs_eq = h / t_end if t_end > 1e-9 and h > 0 else np.nan
@@ -107,7 +109,9 @@ def profile_physics(seq: np.ndarray) -> dict:
             "vs_ok": vs_ok,
             "h_ok": h_ok,
             "thick_ok": thick_ok,
-            "valid": bool(tts_mono and depth_mono and nonneg and vs_ok and thick_ok and h_ok),
+            "valid": bool(
+                tts_mono and depth_mono and nonneg and vs_ok and thick_ok and h_ok
+            ),
             "thickness": [float(x) for x in dz],
             "vs_layers": [float(x) for x in vs],
             "contrast": contrast,
@@ -283,7 +287,11 @@ def main() -> None:
         seqs, recs, rates = generate_until(
             model, donors, L, cfg.max_length, device, TARGET, rng
         )
-        np.save(OUT_DIR / f"generated_L{L}.npy", np.array(seqs, dtype=object), allow_pickle=True)
+        np.save(
+            OUT_DIR / f"generated_L{L}.npy",
+            np.array(seqs, dtype=object),
+            allow_pickle=True,
+        )
 
         real_f0 = np.array([r["f0"] for r in donors])
         gen_f0 = np.array([r["f0"] for r in recs])
@@ -365,7 +373,12 @@ def _collect_stratum(n_layers: int) -> tuple[list[dict], list[dict]]:
     real = []
     for seq in loader.sequences:
         rec = profile_physics(seq)
-        if rec["n_layers"] == n_layers and rec["h_ok"] and rec["tts_mono"] and rec["depth_mono"]:
+        if (
+            rec["n_layers"] == n_layers
+            and rec["h_ok"]
+            and rec["tts_mono"]
+            and rec["depth_mono"]
+        ):
             real.append(rec)
     gen_path = OUT_DIR / f"generated_L{n_layers}.npy"
     gen_seqs = np.load(gen_path, allow_pickle=True)
@@ -378,8 +391,24 @@ def _hist(ax, real, gen, bins, xlabel, title, xlim=None):
     gen = np.asarray(gen, dtype=float)
     real = real[np.isfinite(real)]
     gen = gen[np.isfinite(gen)]
-    ax.hist(real, bins=bins, density=True, alpha=0.55, color="#4C78A8", label="Real", edgecolor="none")
-    ax.hist(gen, bins=bins, density=True, alpha=0.45, color="#E45756", label="Generated", edgecolor="none")
+    ax.hist(
+        real,
+        bins=bins,
+        density=True,
+        alpha=0.55,
+        color="#4C78A8",
+        label="Real",
+        edgecolor="none",
+    )
+    ax.hist(
+        gen,
+        bins=bins,
+        density=True,
+        alpha=0.45,
+        color="#E45756",
+        label="Generated",
+        edgecolor="none",
+    )
     ax.set_xlabel(xlabel)
     ax.set_title(title, fontsize=10)
     ax.grid(True, alpha=0.3)
@@ -443,8 +472,8 @@ def plot_histogram_figure() -> Path:
                 [r["vs_layers"][i] for r in real if len(r["vs_layers"]) == n_layers],
                 [r["vs_layers"][i] for r in gen if len(r["vs_layers"]) == n_layers],
                 vs_bins,
-                rf"$V_{{s,{i+1}}}$ (m/s)",
-                f"{n_layers}-layer  " + rf"$V_{{s,{i+1}}}$",
+                rf"$V_{{s,{i + 1}}}$ (m/s)",
+                f"{n_layers}-layer  " + rf"$V_{{s,{i + 1}}}$",
                 xlim=(50, 1000),
             )
         axes_row[0].legend(loc="upper right", fontsize=8)
@@ -456,9 +485,7 @@ def plot_histogram_figure() -> Path:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     out_path = OUT_DIR / "histograms_H_f0_tts_Vs.png"
     fig.savefig(out_path, dpi=200, bbox_inches="tight")
-    clone_fig_dir = Path(
-        "experiments/flow_matching_simplified/outputs/figures"
-    )
+    clone_fig_dir = Path("experiments/flow_matching_simplified/outputs/figures")
     clone_fig_dir.mkdir(parents=True, exist_ok=True)
     clone_path = clone_fig_dir / "stratified_hmax_histograms.png"
     fig.savefig(clone_path, dpi=200, bbox_inches="tight")

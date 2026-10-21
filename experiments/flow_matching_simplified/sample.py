@@ -141,7 +141,10 @@ def main() -> None:
     if not os.path.exists(checkpoint_path):
         raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
 
-    # Initialize wandb if project provided
+    # Load model before any label that needs the stored epoch.
+    print(f"Loading model from {checkpoint_path}")
+    model, epoch = load_checkpoint(checkpoint_path, device, cfg)
+
     wandb_run = None
     if args.wandb_project and wandb is not None:
         wandb_name = args.wandb_name or f"sampling_epoch_{epoch}"
@@ -151,10 +154,6 @@ def main() -> None:
             config=vars(cfg),
         )
         print("[info] wandb initialized for sampling")
-
-    # Load model
-    print(f"Loading model from {checkpoint_path}")
-    model, epoch = load_checkpoint(checkpoint_path, device, cfg)
 
     # Load training dataset for sequence statistics
     print("Loading training data for sequence statistics...")

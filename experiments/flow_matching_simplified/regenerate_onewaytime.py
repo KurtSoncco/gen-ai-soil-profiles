@@ -17,7 +17,10 @@ import numpy as np
 import pandas as pd
 
 from experiments.flow_matching_simplified.breakpoint_analysis import extract_breakpoints
-from experiments.flow_matching_simplified.data import FlowMatchingDataLoader, FlowMatchingDataset
+from experiments.flow_matching_simplified.data import (
+    FlowMatchingDataLoader,
+    FlowMatchingDataset,
+)
 from experiments.flow_matching_simplified.depth_dependent_stats.depth_statistics import (
     compute_real_data_statistics,
 )
@@ -29,10 +32,24 @@ from soilgen_ai.vs_profiles.vs_calculation import compute_tts
 ROOT = Path(__file__).resolve().parents[2]
 VS_PATH = ROOT / "data" / "vspdb_vs_profiles.parquet"
 OLD_TTS = ROOT / "data" / "vspdb_tts_profiles.parquet"
-OLD_BP = ROOT / "experiments" / "flow_matching_simplified" / "data" / "breakpoints.parquet"
+OLD_BP = (
+    ROOT / "experiments" / "flow_matching_simplified" / "data" / "breakpoints.parquet"
+)
 NEW_TTS = ROOT / "data" / "vspdb_tts_profiles_onewaytime.parquet"
-NEW_BP = ROOT / "experiments" / "flow_matching_simplified" / "data" / "breakpoints_onewaytime.parquet"
-SPLIT_PATH = ROOT / "outputs" / "flow_matching_simplified" / "results" / "split_indices_seed42.json"
+NEW_BP = (
+    ROOT
+    / "experiments"
+    / "flow_matching_simplified"
+    / "data"
+    / "breakpoints_onewaytime.parquet"
+)
+SPLIT_PATH = (
+    ROOT
+    / "outputs"
+    / "flow_matching_simplified"
+    / "results"
+    / "split_indices_seed42.json"
+)
 STATS_PATH = (
     ROOT
     / "experiments"
@@ -155,7 +172,9 @@ def main() -> None:
 
     fine_report = _layer_check(fine, "velocity_metadata_id")
     raw = vs.copy()
-    raw_bounds_layers = int(((raw["vs_value"] >= VS_MIN) & (raw["vs_value"] <= VS_MAX)).sum())
+    raw_bounds_layers = int(
+        ((raw["vs_value"] >= VS_MIN) & (raw["vs_value"] <= VS_MAX)).sum()
+    )
     token_report = _token_bounds(bp)
 
     old_bp = pd.read_parquet(OLD_BP)
@@ -184,17 +203,17 @@ def main() -> None:
     split = json.loads(SPLIT_PATH.read_text())
     ids_equal = old_loader.profile_ids == new_loader.profile_ids
     split_ids = {
-        name: [old_loader.profile_ids[i] for i in split[name]] for name in ("train", "val", "test")
+        name: [old_loader.profile_ids[i] for i in split[name]]
+        for name in ("train", "val", "test")
     }
     split_ids_new = {
-        name: [new_loader.profile_ids[i] for i in split[name]] for name in ("train", "val", "test")
+        name: [new_loader.profile_ids[i] for i in split[name]]
+        for name in ("train", "val", "test")
     }
     split_unchanged = split_ids == split_ids_new
 
     train_sequences = [new_loader.sequences[i] for i in split["train"]]
-    train_ds = FlowMatchingDataset(
-        train_sequences, max_length=20, normalize=True
-    )
+    train_ds = FlowMatchingDataset(train_sequences, max_length=20, normalize=True)
     stats = compute_real_data_statistics(train_ds, bin_width=10.0, max_depth=500.0)
     corrs = compute_profile_statistics(train_ds, lags=[1.0, 2.0, 5.0, 10.0])
     with STATS_PATH.open("wb") as handle:
@@ -228,7 +247,13 @@ def main() -> None:
         "stats_path": str(STATS_PATH),
         "corr_path": str(CORR_PATH),
     }
-    out = ROOT / "outputs" / "flow_matching_simplified" / "results" / "onewaytime_regen.json"
+    out = (
+        ROOT
+        / "outputs"
+        / "flow_matching_simplified"
+        / "results"
+        / "onewaytime_regen.json"
+    )
     out.write_text(json.dumps(summary, indent=2))
     print(json.dumps(summary, indent=2), flush=True)
 
