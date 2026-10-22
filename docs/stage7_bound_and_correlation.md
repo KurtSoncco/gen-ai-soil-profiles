@@ -36,11 +36,11 @@ The stored targets, from `real_correlations_onewaytime.pkl`, are 0.0135 at 1 m, 
 
 The depth-statistic term is the same kind of object: it is called on `u1` and rebuilt with `torch.from_numpy` (`losses.py` lines 91–92). It is not a second path into `v_θ`.
 
-The prior was tested in Stage 6. This check covers the geostatistics term. The term does not move the velocity field. The conditional flow-matching loss, and the Vs penalty on `ut`, are what train it. The oracle result still stands: with a straight path from the true projection, two of three seeds keep a 1 m gap of 0.016 and 0.019. That gap is in the field the CFM loss produced.
+The prior was tested in Stage 6. This check covers the geostatistics term. The term does not move the velocity field. The conditional flow-matching loss is what trains it. Correction from Stage 8: the Vs penalty is computed on `ut`, which contains no network output, so it does not train `v_θ` either ([`stage8_generation_critique.md`](stage8_generation_critique.md)). The oracle result still stands: with a straight path from the true projection, two of three seeds keep a 1 m gap of 0.016 and 0.019. That gap is in the field the CFM loss produced.
 
 ## Open questions
 
-- The Vs penalty on `ut`, weight 1e-2, remains the existing candidate for the bound-rate gap. Stage 7 did not vary that weight.
+- The Vs penalty on `ut`, weight 1e-2, was listed here as the remaining candidate for the bound-rate gap. Stage 8 shows its gradient with respect to the network is zero, so varying the weight cannot change the sampler.
 - Making the correlation term a function of the sample, and of the eval estimator rather than the layer-center target, would be new training. It is not authorized.
 - A learned G_φ is still a different model and is not authorized.
 

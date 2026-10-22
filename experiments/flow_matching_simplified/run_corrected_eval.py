@@ -35,10 +35,13 @@ from experiments.flow_matching_simplified.data import (
     FlowMatchingDataset,
 )
 from experiments.flow_matching_simplified.eval_corrected import (
-    bound_rate,
+    LAGS_M,
     bootstrap_vertical,
+    bound_rate,
     catalog_convention_report,
     depth_trend_error,
+    lag_pairs,
+    validity_rate,
 )
 from experiments.flow_matching_simplified.utils import sample_sequences_ode
 
@@ -94,8 +97,14 @@ def _ks(a: np.ndarray, b: np.ndarray) -> dict[str, float]:
     return {"statistic": float(res.statistic), "pvalue": float(res.pvalue)}
 
 
-def _corr_gap(real_boot, generated) -> dict:
-    gen_boot = bootstrap_vertical(generated, n_boot=N_BOOT, seed=SEED)
+def _corr_gap(real_boot, generated, include_invalid: bool = False) -> dict:
+    gen_boot = bootstrap_vertical(
+        generated, n_boot=N_BOOT, seed=SEED, include_invalid=include_invalid
+    )
+    n_used = sum(
+        len(lag_pairs(seq, LAGS_M[0], include_invalid=include_invalid)["ln0"]) > 0
+        for seq in generated
+    )
     out = {}
     for lag, gest in gen_boot.items():
         rest = real_boot[lag]
@@ -112,6 +121,8 @@ def _corr_gap(real_boot, generated) -> dict:
             "gen_same_layer_fraction": gest["same_layer_fraction"],
             "gen_n_pairs": gest["n_pairs"],
             "abs_correlation_gap": point,
+            "gen_profiles_used_at_first_lag": int(n_used),
+            "gen_profiles": len(generated),
         }
     return out
 
@@ -127,6 +138,7 @@ def _score_set(real, generated, real_boot, histogram_lengths) -> dict:
             )
         )
     return {
+        "validity_rate": validity_rate(generated),
         "depth_monotonicity": check_monotonicity(generated)["monotonic_rate"],
         "bound_rate": bound_rate(generated),
         "final_depth_mean": float(np.mean(compute_final_depth(generated))),
@@ -140,6 +152,10 @@ def _score_set(real, generated, real_boot, histogram_lengths) -> dict:
         "pairwise_distance_generated": _pairwise(generated),
         "depth_trend": depth_trend_error(real, generated, n_boot=N_BOOT, seed=SEED),
         "vertical": _corr_gap(real_boot, generated),
+        "depth_trend_all_profiles": depth_trend_error(
+            real, generated, n_boot=N_BOOT, seed=SEED, include_invalid=True
+        ),
+        "vertical_all_profiles": _corr_gap(real_boot, generated, include_invalid=True),
     }
 
 

@@ -3,10 +3,16 @@
 import numpy as np
 
 from experiments.flow_matching_simplified.eval_corrected import (
+    VS_CEIL,
+    VS_FLOOR,
     _layer_index_at,
     bound_rate,
+    is_valid_profile,
     lag_pairs,
+    layer_model,
+    ln_vs_matrix,
     travel_time_from_vs,
+    validity_rate,
     vertical_structure,
     vs_from_travel_time,
 )
@@ -74,3 +80,28 @@ def test_correlation_separates_independent_layers_from_profile_constant():
     # One Vs per profile => paired values match even across layers.
     assert con.ln_correlation > 0.98
     assert ind.ln_correlation < con.ln_correlation - 0.15
+
+
+def test_invalid_profiles_are_dropped_by_default_and_scored_when_asked():
+    good = _layered([0.0, 5.0, 15.0], [200.0, 400.0])
+    # Depth steps backwards at the second token; travel time stalls at the third.
+    bad = np.array([[0.02, 5.0], [0.03, 4.0], [0.03, 12.0]])
+    assert is_valid_profile(good)
+    assert not is_valid_profile(bad)
+    assert validity_rate([good, bad]) == 0.5
+
+    assert len(lag_pairs(bad, 1.0)["ln0"]) == 0
+    assert np.all(np.isnan(ln_vs_matrix([bad], np.array([10.0]))))
+
+    boundaries, vs = layer_model(bad, include_invalid=True)
+    np.testing.assert_allclose(boundaries, [0.0, 5.0, 5.0, 12.0])
+    assert vs[1] == VS_FLOOR
+    assert vs[2] == VS_CEIL
+    scored = ln_vs_matrix([bad], np.array([10.0]), include_invalid=True)
+    np.testing.assert_allclose(scored, [[np.log(VS_CEIL)]])
+    assert len(lag_pairs(bad, 1.0, include_invalid=True)["ln0"]) > 0
+
+    # A valid profile scores the same either way.
+    np.testing.assert_array_equal(
+        lag_pairs(good, 1.0)["ln0"], lag_pairs(good, 1.0, include_invalid=True)["ln0"]
+    )

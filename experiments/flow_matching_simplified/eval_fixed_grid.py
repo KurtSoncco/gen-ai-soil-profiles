@@ -79,6 +79,10 @@ def _integrate(model, x0, mask, steps, device):
 
 
 def _sample(model, scale, train_raw, fit, n, seed, device, oracle_raw=None):
+    """Layer boundaries come from a training (or, for the oracle, test) profile.
+
+    The MLP generates ln(Vs) at fixed knots only; it does not generate layering.
+    """
     mu = torch.tensor(scale[:, 0], dtype=torch.float32, device=device)
     sig = torch.tensor(scale[:, 1], dtype=torch.float32, device=device)
     rng = np.random.default_rng(seed)

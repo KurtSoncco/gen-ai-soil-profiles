@@ -377,7 +377,12 @@ def _fit_bins(
 def sample_fixed_grid_gaussian(
     train_seqs: list[np.ndarray], num_samples: int, seed: int
 ) -> list[np.ndarray]:
-    """Bootstrap train depth knots. Draw ln(Vs) from 10 m bins with exp correlation."""
+    """Bootstrap train depth knots. Draw ln(Vs) from 10 m bins with exp correlation.
+
+    Layer boundaries are copied from a random training profile. This baseline
+    generates velocities, not layering, so it is not like-for-like with a model
+    that generates its own boundaries on thickness-dependent metrics.
+    """
     means, stds, edges, length = _fit_bins(train_seqs)
     rng = np.random.default_rng(seed)
     out = []

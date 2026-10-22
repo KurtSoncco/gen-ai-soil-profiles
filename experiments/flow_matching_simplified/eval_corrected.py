@@ -14,6 +14,10 @@ import numpy as np
 
 VS_MIN = 100.0
 VS_MAX = 5000.0
+# Scoring values for layers whose Δz or Δt is not positive, when invalid
+# profiles are scored rather than dropped. Far outside [VS_MIN, VS_MAX] on purpose.
+VS_FLOOR = 1.0
+VS_CEIL = 1.0e5
 # Pre-specified. Matches the training bin width. Not chosen on the test split.
 TREND_DEPTHS_M = np.arange(10.0, 210.0, 10.0)
 LAGS_M = (1.0, 2.0)
@@ -58,6 +62,55 @@ def vs_from_travel_time(
     return sequence[:-1, 1], sequence[1:, 1], vs
 
 
+def is_valid_profile(sequence: np.ndarray) -> bool:
+    """Depth and travel time both strictly increase from the surface.
+
+    Equivalent to every layer having positive thickness and a positive, finite Vs.
+    """
+    sequence = np.asarray(sequence, dtype=np.float64)
+    if len(sequence) == 0 or not np.all(np.isfinite(sequence)):
+        return False
+    z = np.concatenate([[0.0], sequence[:, 1]])
+    t = np.concatenate([[0.0], sequence[:, 0]])
+    return bool(np.all(np.diff(z) > 0) and np.all(np.diff(t) > 0))
+
+
+def validity_rate(sequences: list[np.ndarray]) -> float:
+    if not sequences:
+        return float("nan")
+    return float(np.mean([is_valid_profile(seq) for seq in sequences]))
+
+
+def layer_model(
+    sequence: np.ndarray, include_invalid: bool = False
+) -> tuple[np.ndarray, np.ndarray] | None:
+    """Layer boundaries (surface first) and Vs for scoring.
+
+    With ``include_invalid`` false, an invalid profile returns ``None`` (the
+    Stage 3–7 behaviour). With it true, boundaries are the running maximum of
+    depth, so a backwards step becomes a zero-thickness layer, and Vs is
+    ``VS_FLOOR`` where ``Δz <= 0``, ``VS_CEIL`` where ``Δt <= 0``, and clipped to
+    ``[VS_FLOOR, VS_CEIL]`` elsewhere. The profile then counts against the
+    distributional metrics instead of disappearing from them.
+    """
+    sequence = np.asarray(sequence, dtype=np.float64)
+    if len(sequence) == 0:
+        return None
+    if is_valid_profile(sequence):
+        z0, z1, vs = vs_from_travel_time(sequence)
+        return np.concatenate([z0[:1], z1]), vs
+    if not include_invalid or not np.all(np.isfinite(sequence)):
+        return None
+    z = np.concatenate([[0.0], sequence[:, 1]])
+    t = np.concatenate([[0.0], sequence[:, 0]])
+    dz, dt = np.diff(z), np.diff(t)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        vs = np.where((dz > 0) & (dt > 0), dz / dt, np.nan)
+    vs = np.where(dz <= 0, VS_FLOOR, np.where(dt <= 0, VS_CEIL, vs))
+    vs = np.clip(vs, VS_FLOOR, VS_CEIL)
+    return np.maximum.accumulate(z), vs
+
+
 def profile_in_bounds(sequence: np.ndarray) -> bool:
     _, _, vs = vs_from_travel_time(sequence)
     if len(vs) == 0:
@@ -78,31 +131,47 @@ def _layer_index_at(boundaries: np.ndarray, z: np.ndarray) -> np.ndarray:
     return idx
 
 
+def _scoring_layers(
+    sequence: np.ndarray, include_invalid: bool
+) -> tuple[np.ndarray, np.ndarray] | None:
+    """Boundaries and Vs for the grid metrics, or ``None`` if the profile is skipped."""
+    if include_invalid:
+        return layer_model(sequence, include_invalid=True)
+    z0, z1, vs = vs_from_travel_time(sequence)
+    if len(vs) == 0 or np.any(np.diff(np.concatenate([[z0[0]], z1])) <= 0):
+        return None
+    if np.any(~np.isfinite(vs) | (vs <= 0)):
+        return None
+    return np.concatenate([z0[:1], z1]), vs
+
+
 def lag_pairs(
-    sequence: np.ndarray, lag_m: float, step_m: float = PAIR_STEP_M
+    sequence: np.ndarray,
+    lag_m: float,
+    step_m: float = PAIR_STEP_M,
+    include_invalid: bool = False,
 ) -> dict[str, np.ndarray]:
     """Pairs ``(z, z+lag)`` on a fixed depth grid inside one piecewise-constant profile.
 
-    Vs is the Passeri inversion ``Δz / Δt``. Pairs in a profile whose depth is not
-    strictly increasing are dropped.
+    Vs is the Passeri inversion ``Δz / Δt``. By default a profile whose depth is
+    not strictly increasing, or with a non-positive or non-finite Vs, gives no
+    pairs. ``include_invalid`` scores it through ``layer_model`` instead.
     """
-    z0, z1, vs = vs_from_travel_time(sequence)
     empty = {
         "ln0": np.zeros(0),
         "ln1": np.zeros(0),
         "same": np.zeros(0, dtype=bool),
     }
-    if len(vs) == 0 or np.any(np.diff(np.concatenate([[z0[0]], z1])) <= 0):
+    layers = _scoring_layers(sequence, include_invalid)
+    if layers is None:
         return empty
-    if np.any(~np.isfinite(vs) | (vs <= 0)):
-        return empty
-    z_end = float(z1[-1])
+    boundaries, vs = layers
+    z_end = float(boundaries[-1])
     if z_end <= lag_m:
         return empty
     grid = np.arange(0.0, z_end - lag_m + 1e-9, step_m)
     if len(grid) == 0:
         return empty
-    boundaries = np.concatenate([z0[:1], z1])
     i0 = _layer_index_at(boundaries, grid)
     i1 = _layer_index_at(boundaries, grid + lag_m)
     valid = (i0 >= 0) & (i1 >= 0) & (i0 < len(vs)) & (i1 < len(vs))
@@ -136,7 +205,9 @@ def _corr(x: np.ndarray, y: np.ndarray) -> float:
 
 
 def vertical_structure(
-    sequences: list[np.ndarray], lags: tuple[float, ...] = LAGS_M
+    sequences: list[np.ndarray],
+    lags: tuple[float, ...] = LAGS_M,
+    include_invalid: bool = False,
 ) -> list[LagEstimate]:
     """Same-layer fraction and correlation of ``ln(Vs)`` at lag ``h``.
 
@@ -145,7 +216,12 @@ def vertical_structure(
     correlation is the Pearson correlation of the paired ``ln(Vs)`` values,
     including pairs that fall in different layers.
     """
-    cached = {lag: [lag_pairs(seq, lag) for seq in sequences] for lag in lags}
+    cached = {
+        lag: [
+            lag_pairs(seq, lag, include_invalid=include_invalid) for seq in sequences
+        ]
+        for lag in lags
+    }
     out = []
     for lag in lags:
         parts = cached[lag]
@@ -171,13 +247,19 @@ def bootstrap_vertical(
     lags: tuple[float, ...] = LAGS_M,
     n_boot: int = 400,
     seed: int = 42,
+    include_invalid: bool = False,
 ) -> dict[str, dict[str, float]]:
     """Profile-resample intervals for same-layer fraction and ``ln(Vs)`` correlation."""
     rng = np.random.default_rng(seed)
     n = len(sequences)
-    point = vertical_structure(sequences, lags)
+    point = vertical_structure(sequences, lags, include_invalid=include_invalid)
     bags = {lag: {"same": [], "corr": []} for lag in lags}
-    pair_cache = {lag: [lag_pairs(seq, lag) for seq in sequences] for lag in lags}
+    pair_cache = {
+        lag: [
+            lag_pairs(seq, lag, include_invalid=include_invalid) for seq in sequences
+        ]
+        for lag in lags
+    }
     for _ in range(n_boot):
         draw = rng.integers(0, n, size=n)
         for lag in lags:
@@ -210,17 +292,17 @@ def bootstrap_vertical(
 
 
 def ln_vs_matrix(
-    sequences: list[np.ndarray], depths: np.ndarray = TREND_DEPTHS_M
+    sequences: list[np.ndarray],
+    depths: np.ndarray = TREND_DEPTHS_M,
+    include_invalid: bool = False,
 ) -> np.ndarray:
     """``ln(Vs)`` from ``Vs = Δz / Δt`` at fixed depths. NaN if the profile stops short."""
     mat = np.full((len(sequences), len(depths)), np.nan)
     for i, seq in enumerate(sequences):
-        z0, z1, vs = vs_from_travel_time(seq)
-        if len(vs) == 0 or np.any(~np.isfinite(vs) | (vs <= 0)):
+        layers = _scoring_layers(seq, include_invalid)
+        if layers is None:
             continue
-        if np.any(np.diff(np.concatenate([[z0[0]], z1])) <= 0):
-            continue
-        boundaries = np.concatenate([z0[:1], z1])
+        boundaries, vs = layers
         ln = np.log(vs)
         for j, z in enumerate(depths):
             if z <= boundaries[0] or z > boundaries[-1]:
@@ -237,14 +319,16 @@ def depth_trend_error(
     depths: np.ndarray = TREND_DEPTHS_M,
     n_boot: int = 400,
     seed: int = 42,
+    include_invalid: bool = False,
 ) -> dict[str, float | list]:
     """Weighted RMSE of the mean ``ln(Vs)`` curve, using every depth that both sets reach.
 
     Weight at each depth is the number of real profiles that reach it. There is
-    no minimum count. Bootstrap resamples profiles.
+    no minimum count. Bootstrap resamples profiles. ``include_invalid`` applies
+    to both sets.
     """
-    real_m = ln_vs_matrix(real, depths)
-    gen_m = ln_vs_matrix(generated, depths)
+    real_m = ln_vs_matrix(real, depths, include_invalid=include_invalid)
+    gen_m = ln_vs_matrix(generated, depths, include_invalid=include_invalid)
     point, counts = _weighted_rmse(real_m, gen_m)
     rng = np.random.default_rng(seed)
     boots = []
@@ -263,6 +347,8 @@ def depth_trend_error(
         "n_real": counts["n_real"],
         "n_gen": counts["n_gen"],
         "n_depths_used": counts["n_depths_used"],
+        "n_gen_profiles_used": int(np.sum(np.any(np.isfinite(gen_m), axis=1))),
+        "n_gen_profiles": int(len(generated)),
     }
 
 

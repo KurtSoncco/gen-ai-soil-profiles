@@ -28,7 +28,7 @@ Flagship path:
 6. Model. `TransformerModel` (`model.py` line 116): linear input projection (line 156), `SinusoidalTimeEmbedding` (lines 162–167), `PositionalEncoding` (lines 170–172), `DepthConvBlock` kernel 3 (lines 175–178). Widths are in `config.py` lines 34–42: 4 layers, 8 heads, hidden 256, time embedding 128.
 7. Flow loss. `compute_flow_matching_loss_with_depth` (lines 112–140): `u0 ~ N(0, I)`, linear interpolant, masked MSE of `v_θ` against `(u1 - ut) / (1 - t)`.
 8. Samplers. Euler is `train.sample_sequences` (lines 354–369). RK4 is `utils.sample_sequences_ode` (lines 21–99). `comprehensive_eval` calls Euler. README line 45 says RK4, 50 steps (`config.ode_steps`, line 62).
-9. Physics loss. `compute_vs_penalty` (`utils.py` lines 357–358) uses `Vs = Δz / Δt` on denormalized `ut`, added with weight `vs_penalty_weight` (train file lines 143–153). This term has gradients.
+9. Physics loss. `compute_vs_penalty` (`utils.py` lines 357–358) uses `Vs = Δz / Δt` on denormalized `ut`, added with weight `vs_penalty_weight` (train file lines 143–153). Correction from Stage 8: `ut` contains no network output, so this term has no gradient with respect to the network weights.
 10. Geostatistics losses. `compute_depth_statistics_loss` and `compute_vertical_correlation_loss` are called on the real batch `u1`, not on `predicted_v` (lines 171–206). Both go through NumPy (`losses.py` line 91, `torch.from_numpy`), so they do not train `v_θ`.
 11. Entry. `depth_dependent_stats/train_with_depth_losses.py` `main` (line 310), launched by `train_model.sh`.
 
