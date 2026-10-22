@@ -57,6 +57,22 @@ Headline protocol: Euler 50, 200 samples, seed-42 test split. Distribution metri
 
 Keep the all-Toro start as the headline (best trend, Vs30 already on the data). Use the mix when residual \(\rho\) is the decision metric. Generated \(f_0\) (7.7–8.0 Hz) matches **train** (8.0 Hz), not test (9.5 Hz).
 
+### Figures
+
+Seed-42 headline draw (`s42_e500/latest.pt`, Euler 50, 200 profiles, matched \((n, H, V_{s,z})\)). Navy is the test split; vermillion is generated. Redraw with `python -m experiments.flow_matching_simplified.plot_constrained_figures`.
+
+![Real and generated Vs profiles](docs/figures/constrained_vs_profiles.png)
+
+**Figure 1.** Ten real test profiles (**a**) and ten generated profiles (**b**). Each trace is a horizontal `stairs` plot: \(V_s\) is constant in a layer and depth increases downward. Dashed lines are 100 and 5000 m/s.
+
+![ln Vs versus depth](docs/figures/constrained_ln_vs_depth.png)
+
+**Figure 2.** \(\ln V_s\) at 10 m knots to 200 m. The navy band is the real test 10th–90th percentile. The generated median stays inside that band and is slightly soft below about 50 m.
+
+![Vs30 and layer thickness](docs/figures/constrained_vs30_thickness.png)
+
+**Figure 3.** Time-averaged Vs30 (**a**) and layer thickness (**b**) on this draw. Kolmogorov–Smirnov statistics: Vs30 0.075, thickness 0.059. The thickness axis stops at 40 m.
+
 A Gaussian-trend structured prior (three seeds) did not beat the Stage 3 control on the old 1 m / 2 m / pairwise rule and was dropped. Details: [`docs/stage6_structured_prior_stage1.md`](docs/stage6_structured_prior_stage1.md).
 
 The Conv1D VAE reports Vs30 on a different protocol (real mean 219 m/s) and is not a row in the table above.
@@ -86,6 +102,7 @@ Rebuild one-way breakpoints (needs a local VSPDB extract), then train and score 
 python -m experiments.flow_matching_simplified.regenerate_onewaytime
 python -m experiments.flow_matching_simplified.train_constrained --seed 42 --epochs 500 --tag s42_e500
 python -m experiments.flow_matching_simplified.stage9_score --tag s42_e500
+python -m experiments.flow_matching_simplified.plot_constrained_figures
 ```
 
 `--no-toro-source` starts from Gaussian noise. `--toro-source-frac 0.5` is the Stage 10 mix. The Stage 3 control is `train_onewaytime.py` plus `run_corrected_eval`.

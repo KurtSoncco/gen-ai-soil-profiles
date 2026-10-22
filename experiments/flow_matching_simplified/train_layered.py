@@ -94,7 +94,9 @@ class LayerTokens:
         self.cond = condition(self.depths, self.lengths)
 
     def ln_h_floor(self, quantile: float = 1.0) -> float:
-        return float(np.percentile(np.concatenate([t[:, 0] for t in self.raw]), quantile))
+        return float(
+            np.percentile(np.concatenate([t[:, 0] for t in self.raw]), quantile)
+        )
 
 
 def condition(depths: np.ndarray, lengths: np.ndarray) -> np.ndarray:
@@ -193,12 +195,12 @@ def train(seed: int, epochs: int, device: torch.device, tag: str) -> dict:
     floor = tr.ln_h_floor()
     scale_t = torch.tensor(tr.scale, dtype=torch.float32, device=device)
     model = build_model().to(device)
-    opt = torch.optim.AdamW(model.parameters(), lr=LR, betas=(0.6, 0.999), weight_decay=1e-4)
+    opt = torch.optim.AdamW(
+        model.parameters(), lr=LR, betas=(0.6, 0.999), weight_decay=1e-4
+    )
     sched = ReduceLROnPlateau(opt, mode="min", factor=0.5, patience=10, min_lr=1e-6)
     tensors = {
-        name: tuple(
-            torch.tensor(a, device=device) for a in (d.x, d.mask, d.cond)
-        )
+        name: tuple(torch.tensor(a, device=device) for a in (d.x, d.mask, d.cond))
         for name, d in (("train", tr), ("val", va))
     }
     order_rng = np.random.default_rng(42)
@@ -233,7 +235,12 @@ def train(seed: int, epochs: int, device: torch.device, tag: str) -> dict:
             val = float(val)
             sched.step(val)
             history.append(
-                {"epoch": epoch, "train": total / seen, "penalty": pen_total / seen, "val": val}
+                {
+                    "epoch": epoch,
+                    "train": total / seen,
+                    "penalty": pen_total / seen,
+                    "val": val,
+                }
             )
             state = {"model": model.state_dict(), "epoch": epoch, "scale": tr.scale}
             if val < best:

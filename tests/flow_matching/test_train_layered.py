@@ -59,8 +59,12 @@ def test_endpoint_penalty_has_gradient():
     cond = torch.tensor(data.cond[:8])
     scale = torch.tensor(data.scale, dtype=torch.float32)
     torch.manual_seed(0)
-    _, penalty = flow_loss(model, x1, mask, cond, scale, ln_h_floor=10.0, penalty_weight=1.0)
+    _, penalty = flow_loss(
+        model, x1, mask, cond, scale, ln_h_floor=10.0, penalty_weight=1.0
+    )
     penalty.backward()
-    grad = sum(float(p.grad.abs().sum()) for p in model.parameters() if p.grad is not None)
+    grad = sum(
+        float(p.grad.abs().sum()) for p in model.parameters() if p.grad is not None
+    )
     assert penalty.item() > 0
     assert grad > 0

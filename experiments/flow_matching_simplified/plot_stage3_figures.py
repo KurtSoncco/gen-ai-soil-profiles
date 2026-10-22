@@ -31,9 +31,27 @@ from experiments.flow_matching_simplified.run_corrected_eval import _denorm_spli
 from soilgen_ai.figures.style import STYLE
 
 ROOT = Path(__file__).resolve().parents[2]
-CKPT = ROOT / "outputs" / "flow_matching_simplified_onewaytime" / "checkpoints" / "latest.pt"
-DATA = ROOT / "experiments" / "flow_matching_simplified" / "data" / "breakpoints_onewaytime.parquet"
-SPLIT = ROOT / "outputs" / "flow_matching_simplified" / "results" / "split_indices_seed42.json"
+CKPT = (
+    ROOT
+    / "outputs"
+    / "flow_matching_simplified_onewaytime"
+    / "checkpoints"
+    / "latest.pt"
+)
+DATA = (
+    ROOT
+    / "experiments"
+    / "flow_matching_simplified"
+    / "data"
+    / "breakpoints_onewaytime.parquet"
+)
+SPLIT = (
+    ROOT
+    / "outputs"
+    / "flow_matching_simplified"
+    / "results"
+    / "split_indices_seed42.json"
+)
 OUT = ROOT / "docs" / "figures"
 VS_MIN = 100.0
 VS_MAX = 5000.0
@@ -107,7 +125,9 @@ def _sample():
     )
     model, epoch = load_checkpoint(str(CKPT), device, cfg_mod.cfg)
     model.eval()
-    generated = _denorm_generated(euler_integrate(model, u0, masks, stats, 50), lengths, stats_list)
+    generated = _denorm_generated(
+        euler_integrate(model, u0, masks, stats, 50), lengths, stats_list
+    )
     gauss = sample_fixed_grid_gaussian(train_raw, 200, 42)
     print(f"latest epoch index {int(epoch)} device {device}", flush=True)
     return real, generated, gauss
@@ -146,7 +166,9 @@ def plot_band(real, generated, gauss) -> None:
         )
         ax.plot(real_med, TREND_DEPTHS_M, color=STYLE.real, lw=1.2, label="Real median")
         ax.plot(med, TREND_DEPTHS_M, color=color, lw=1.2, label=f"{label} median")
-        ax.plot(lo, TREND_DEPTHS_M, color=color, lw=0.7, ls="--", label=f"{label} p10–p90")
+        ax.plot(
+            lo, TREND_DEPTHS_M, color=color, lw=0.7, ls="--", label=f"{label} p10–p90"
+        )
         ax.plot(hi, TREND_DEPTHS_M, color=color, lw=0.7, ls="--")
         labelled = False
         for z, a, b, m, nr, ng in zip(TREND_DEPTHS_M, real_lo, real_hi, med, n_real, n):

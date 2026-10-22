@@ -50,5 +50,7 @@ def test_residual_correlation_recovers_ar1():
 
 
 def test_thickness_ks_zero_on_identical_sets():
-    seq = travel_time_from_vs(np.array([0.0, 2.0, 12.0, 50.0]), np.array([150.0, 300.0, 600.0]))
+    seq = travel_time_from_vs(
+        np.array([0.0, 2.0, 12.0, 50.0]), np.array([150.0, 300.0, 600.0])
+    )
     assert thickness_ks([seq] * 5, [seq] * 5)["weighted_ks"] == 0.0

@@ -217,9 +217,7 @@ def vertical_structure(
     including pairs that fall in different layers.
     """
     cached = {
-        lag: [
-            lag_pairs(seq, lag, include_invalid=include_invalid) for seq in sequences
-        ]
+        lag: [lag_pairs(seq, lag, include_invalid=include_invalid) for seq in sequences]
         for lag in lags
     }
     out = []
@@ -255,9 +253,7 @@ def bootstrap_vertical(
     point = vertical_structure(sequences, lags, include_invalid=include_invalid)
     bags = {lag: {"same": [], "corr": []} for lag in lags}
     pair_cache = {
-        lag: [
-            lag_pairs(seq, lag, include_invalid=include_invalid) for seq in sequences
-        ]
+        lag: [lag_pairs(seq, lag, include_invalid=include_invalid) for seq in sequences]
         for lag in lags
     }
     for _ in range(n_boot):

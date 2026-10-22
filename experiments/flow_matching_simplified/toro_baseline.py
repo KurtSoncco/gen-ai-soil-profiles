@@ -31,7 +31,29 @@ from experiments.flow_matching_simplified.eval_corrected import (
 )
 
 MEDIAN_EDGES_M = np.array(
-    [0, 2, 4, 6, 8, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100, 125, 150, 200, 300, 500, np.inf]
+    [
+        0,
+        2,
+        4,
+        6,
+        8,
+        10,
+        15,
+        20,
+        25,
+        30,
+        40,
+        50,
+        60,
+        80,
+        100,
+        125,
+        150,
+        200,
+        300,
+        500,
+        np.inf,
+    ]
 )
 
 
@@ -77,9 +99,7 @@ def _inverse_cumulative_rate(s, c1, c2, c3):
 
 def _rho(d, t, rho0, delta, rho200, d0, b):
     rho_t = rho0 * np.exp(-t / delta)
-    rho_d = np.where(
-        d <= 200.0, rho200 * ((d + d0) / (200.0 + d0)) ** b, rho200
-    )
+    rho_d = np.where(d <= 200.0, rho200 * ((d + d0) / (200.0 + d0)) ** b, rho200)
     return (1.0 - rho_d) * rho_t + rho_d
 
 
@@ -108,7 +128,11 @@ def fit_layering(train: list[np.ndarray]) -> tuple[float, float, float]:
         nll,
         x0,
         method="L-BFGS-B",
-        bounds=[(np.log(0.01), np.log(1000.0)), (0.0, 3.0), (np.log(1e-4), np.log(100.0))],
+        bounds=[
+            (np.log(0.01), np.log(1000.0)),
+            (0.0, 3.0),
+            (np.log(1e-4), np.log(100.0)),
+        ],
     )
     return float(np.exp(res.x[0])), float(res.x[1]), float(np.exp(res.x[2]))
 
@@ -172,7 +196,9 @@ def fit_toro(train: list[np.ndarray]) -> ToroFit:
     return ToroFit(c1, c2, c3, rho0, delta, rho200, d0, b, centres, med, sig, depths)
 
 
-def sample_toro_bounds(fit: ToroFit, h_total: float, rng: np.random.Generator) -> np.ndarray:
+def sample_toro_bounds(
+    fit: ToroFit, h_total: float, rng: np.random.Generator
+) -> np.ndarray:
     """Interfaces of a non-homogeneous Poisson process on ``(0, h_total]``."""
     interfaces = []
     s = 0.0
@@ -208,7 +234,9 @@ def match_layer_count(bounds: np.ndarray, n: int) -> np.ndarray:
     return bounds
 
 
-def fill_toro_vs(fit: ToroFit, bounds: np.ndarray, rng: np.random.Generator) -> np.ndarray:
+def fill_toro_vs(
+    fit: ToroFit, bounds: np.ndarray, rng: np.random.Generator
+) -> np.ndarray:
     """Toro median plus AR(1) residual at the midpoints of ``bounds``."""
     mid = 0.5 * (bounds[:-1] + bounds[1:])
     z = np.empty(len(mid))
@@ -226,9 +254,10 @@ def fill_toro_vs(fit: ToroFit, bounds: np.ndarray, rng: np.random.Generator) -> 
             )
         )
         z[i] = rho * z[i - 1] + np.sqrt(1.0 - rho**2) * rng.normal()
-    ln_vs = np.interp(mid, fit.centres, fit.median) + np.interp(
-        mid, fit.centres, fit.sigma
-    ) * z
+    ln_vs = (
+        np.interp(mid, fit.centres, fit.median)
+        + np.interp(mid, fit.centres, fit.sigma) * z
+    )
     return np.exp(ln_vs)
 
 

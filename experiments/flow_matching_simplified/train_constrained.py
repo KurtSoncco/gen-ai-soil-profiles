@@ -106,7 +106,14 @@ class ConstrainedTokens:
         self.cond = condition(self.depths, self.lengths, self.vs_z)
 
     def h_floor(self, quantile: float = 1.0) -> float:
-        return float(np.percentile(np.concatenate([np.exp(t[:, 0]) * d for t, d in zip(self.raw, self.depths)]), quantile))
+        return float(
+            np.percentile(
+                np.concatenate(
+                    [np.exp(t[:, 0]) * d for t, d in zip(self.raw, self.depths)]
+                ),
+                quantile,
+            )
+        )
 
 
 def condition(depths: np.ndarray, lengths: np.ndarray, vs_z: np.ndarray) -> np.ndarray:
@@ -214,10 +221,13 @@ def sample(
     m = mask.unsqueeze(-1).float()
     x = torch.randn(n, MAX_LAYERS, 2, generator=gen).to(device) * m
     if toro_fit is not None:
-        toro_x = torch.tensor(
-            encode_toro_batch(toro_fit, depths, lengths, data.scale, rng),
-            device=device,
-        ) * m
+        toro_x = (
+            torch.tensor(
+                encode_toro_batch(toro_fit, depths, lengths, data.scale, rng),
+                device=device,
+            )
+            * m
+        )
         if toro_source_frac >= 1.0:
             x = toro_x
         elif toro_source_frac > 0.0:
@@ -258,7 +268,9 @@ def train(
     floor = tr.h_floor()
     scale_t = torch.tensor(tr.scale, dtype=torch.float32, device=device)
     model = build_model().to(device)
-    opt = torch.optim.AdamW(model.parameters(), lr=LR, betas=(0.6, 0.999), weight_decay=1e-4)
+    opt = torch.optim.AdamW(
+        model.parameters(), lr=LR, betas=(0.6, 0.999), weight_decay=1e-4
+    )
     sched = ReduceLROnPlateau(opt, mode="min", factor=0.5, patience=10, min_lr=1e-6)
     tensors = {
         name: tuple(torch.tensor(a, device=device) for a in (d.x, d.mask, d.cond))
@@ -303,7 +315,14 @@ def train(
                     )
                     x0 = torch.where(pick.view(len(rows_cpu), 1, 1), x0, noise)
             loss, pen = flow_loss(
-                model, x1[rows], mk[rows], cd[rows], scale_t, floor, THIN_PENALTY_WEIGHT, x0
+                model,
+                x1[rows],
+                mk[rows],
+                cd[rows],
+                scale_t,
+                floor,
+                THIN_PENALTY_WEIGHT,
+                x0,
             )
             opt.zero_grad(set_to_none=True)
             loss.backward()
@@ -322,14 +341,21 @@ def train(
                 else:
                     val_rng = np.random.default_rng(1234)
                     x0_val = torch.tensor(
-                        encode_toro_batch(toro_fit, va.depths, va.lengths, tr.scale, val_rng),
+                        encode_toro_batch(
+                            toro_fit, va.depths, va.lengths, tr.scale, val_rng
+                        ),
                         device=device,
                     )
                 val, _ = flow_loss(model, vx, vm, vc, scale_t, floor, 0.0, x0_val)
             val = float(val)
             sched.step(val)
             history.append(
-                {"epoch": epoch, "train": total / seen, "penalty": pen_total / seen, "val": val}
+                {
+                    "epoch": epoch,
+                    "train": total / seen,
+                    "penalty": pen_total / seen,
+                    "val": val,
+                }
             )
             state = {
                 "model": model.state_dict(),

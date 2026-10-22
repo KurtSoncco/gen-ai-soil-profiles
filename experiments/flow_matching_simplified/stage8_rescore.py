@@ -163,7 +163,13 @@ def main() -> None:
 
     gauss = sample_fixed_grid_gaussian(train_raw, N_SAMPLES, SEED)
     results["sets"]["gaussian"] = score(
-        "gaussian", gauss, real, real_boot, ref, LAYER_SOURCE["gaussian"], train=train_raw
+        "gaussian",
+        gauss,
+        real,
+        real_boot,
+        ref,
+        LAYER_SOURCE["gaussian"],
+        train=train_raw,
     )
     print("gaussian scored", flush=True)
 

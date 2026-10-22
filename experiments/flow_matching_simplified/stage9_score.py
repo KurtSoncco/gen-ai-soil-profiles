@@ -12,7 +12,11 @@ import numpy as np
 import torch
 
 from experiments.flow_matching_simplified.eval_corrected import bootstrap_vertical
-from experiments.flow_matching_simplified.run_corrected_eval import N_BOOT, N_SAMPLES, SEED
+from experiments.flow_matching_simplified.run_corrected_eval import (
+    N_BOOT,
+    N_SAMPLES,
+    SEED,
+)
 from experiments.flow_matching_simplified.site_metrics import (
     fit_residual_reference,
     vs_depth_breakdown,
@@ -47,11 +51,17 @@ def main() -> None:
     toro_fit = None
     results = {"tag": args.tag, "sets": {}}
     for name in ("latest", "best"):
-        ckpt = torch.load(OUT / args.tag / f"{name}.pt", map_location=device, weights_only=False)
+        ckpt = torch.load(
+            OUT / args.tag / f"{name}.pt", map_location=device, weights_only=False
+        )
         assert np.allclose(ckpt["scale"], data.scale)
         model = build_model()
         model.load_state_dict(ckpt["model"])
-        frac = float(ckpt.get("toro_source_frac", 1.0 if ckpt.get("use_toro_source", True) else 0.0))
+        frac = float(
+            ckpt.get(
+                "toro_source_frac", 1.0 if ckpt.get("use_toro_source", True) else 0.0
+            )
+        )
         if frac > 0.0:
             if toro_fit is None:
                 toro_fit = fit_toro(train_seq)
@@ -75,7 +85,9 @@ def main() -> None:
             )
             results["sets"][key]["epoch_index"] = int(ckpt["epoch"])
             results["sets"][key]["vs_z_mode"] = mode
-            results["sets"][key]["use_toro_source"] = bool(ckpt.get("use_toro_source", True))
+            results["sets"][key]["use_toro_source"] = bool(
+                ckpt.get("use_toro_source", True)
+            )
             results["sets"][key]["vs_breakdown"] = vs_depth_breakdown(gen)
             results["sets"][key]["final_depth_mean"] = float(
                 np.mean([s[-1, 1] for s in gen])

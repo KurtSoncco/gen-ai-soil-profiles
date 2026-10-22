@@ -12,7 +12,11 @@ import numpy as np
 import torch
 
 from experiments.flow_matching_simplified.eval_corrected import bootstrap_vertical
-from experiments.flow_matching_simplified.run_corrected_eval import N_BOOT, N_SAMPLES, SEED
+from experiments.flow_matching_simplified.run_corrected_eval import (
+    N_BOOT,
+    N_SAMPLES,
+    SEED,
+)
 from experiments.flow_matching_simplified.site_metrics import fit_residual_reference
 from experiments.flow_matching_simplified.stage8_rescore import (
     RESULT as RESCORE_RESULT,
@@ -42,7 +46,9 @@ def main() -> None:
     data = LayerTokens(train_seq)
     results = {"tag": args.tag, "sets": {}}
     for name in ("latest", "best"):
-        ckpt = torch.load(OUT / args.tag / f"{name}.pt", map_location=device, weights_only=False)
+        ckpt = torch.load(
+            OUT / args.tag / f"{name}.pt", map_location=device, weights_only=False
+        )
         assert np.allclose(ckpt["scale"], data.scale)
         model = build_model()
         model.load_state_dict(ckpt["model"])

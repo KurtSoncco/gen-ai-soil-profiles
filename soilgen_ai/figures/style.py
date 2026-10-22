@@ -44,7 +44,9 @@ class FigureStyle:
     spine_pt: float = 0.6
     dpi: int = 300
 
-    def size(self, columns: str = "double", aspect: float = 0.45) -> tuple[float, float]:
+    def size(
+        self, columns: str = "double", aspect: float = 0.45
+    ) -> tuple[float, float]:
         """Figure size in inches for a Nature column width."""
         if columns not in _COLUMN_MM:
             raise ValueError(f"columns must be one of {sorted(_COLUMN_MM)}")

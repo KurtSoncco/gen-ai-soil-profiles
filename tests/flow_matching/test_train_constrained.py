@@ -68,9 +68,13 @@ def test_endpoint_penalty_has_gradient():
     cond = torch.tensor(data.cond[:8])
     scale = torch.tensor(data.scale, dtype=torch.float32)
     torch.manual_seed(0)
-    _, penalty = flow_loss(model, x1, mask, cond, scale, h_floor=50.0, penalty_weight=1.0)
+    _, penalty = flow_loss(
+        model, x1, mask, cond, scale, h_floor=50.0, penalty_weight=1.0
+    )
     penalty.backward()
-    grad = sum(float(p.grad.abs().sum()) for p in model.parameters() if p.grad is not None)
+    grad = sum(
+        float(p.grad.abs().sum()) for p in model.parameters() if p.grad is not None
+    )
     assert penalty.item() > 0
     assert grad > 0
 
@@ -91,7 +95,9 @@ def test_encode_layers_is_softmax_preimage():
     tok = encode_layers(bounds, vs)
     rebuilt = decode_tokens(tok, 40.0)
     np.testing.assert_allclose(rebuilt[-1, 1], 40.0)
-    np.testing.assert_allclose(np.diff(np.concatenate([[0.0], rebuilt[:, 1]])), np.diff(bounds))
+    np.testing.assert_allclose(
+        np.diff(np.concatenate([[0.0], rebuilt[:, 1]])), np.diff(bounds)
+    )
 
 
 def test_nearest_train_distance_is_zero_for_copies():

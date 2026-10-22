@@ -26,7 +26,11 @@ from experiments.flow_matching_simplified.eval_corrected import (
     layer_model,
     travel_time_from_vs,
 )
-from experiments.flow_matching_simplified.run_corrected_eval import N_BOOT, N_SAMPLES, SEED
+from experiments.flow_matching_simplified.run_corrected_eval import (
+    N_BOOT,
+    N_SAMPLES,
+    SEED,
+)
 from experiments.flow_matching_simplified.site_metrics import (
     fit_residual_reference,
     nearest_train_distance,
@@ -72,7 +76,9 @@ def renormalize_to_h(seq: np.ndarray, h_total: float) -> np.ndarray:
 
 
 def _sample_layered(tag: str, data: LayerTokens, device: torch.device):
-    ckpt = torch.load(LAYERED_OUT / tag / "latest.pt", map_location=device, weights_only=False)
+    ckpt = torch.load(
+        LAYERED_OUT / tag / "latest.pt", map_location=device, weights_only=False
+    )
     model = build_model()
     model.load_state_dict(ckpt["model"])
     return sample(model, data, N_SAMPLES, SEED, device)

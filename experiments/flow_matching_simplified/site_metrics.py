@@ -268,7 +268,12 @@ def site_signatures(
 def _summary(x: np.ndarray) -> dict[str, float]:
     x = x[np.isfinite(x)]
     if len(x) == 0:
-        return {"n": 0, "median": float("nan"), "p10": float("nan"), "p90": float("nan")}
+        return {
+            "n": 0,
+            "median": float("nan"),
+            "p10": float("nan"),
+            "p90": float("nan"),
+        }
     return {
         "n": int(len(x)),
         "median": float(np.median(x)),
@@ -325,7 +330,9 @@ def vs_depth_breakdown(
     """Time-averaged Vs at 5, 10, and 30 m, plus median layer Vs by depth band."""
     layers = _layers(sequences, include_invalid)
     by_z = {f"vs{int(z)}": [] for z in VS_Z_DEPTHS_M}
-    by_band = {f"{a:.0f}-{b if np.isfinite(b) else 'inf'}": [] for a, b in LAYER_VS_BANDS_M}
+    by_band = {
+        f"{a:.0f}-{b if np.isfinite(b) else 'inf'}": [] for a, b in LAYER_VS_BANDS_M
+    }
     for bounds, vs in layers:
         for z in VS_Z_DEPTHS_M:
             by_z[f"vs{int(z)}"].append(vs_z(bounds, vs, z))
@@ -336,7 +343,9 @@ def vs_depth_breakdown(
                 by_band[key].extend(vs[sel].tolist())
     return {
         "time_averaged": {k: _summary(np.asarray(v, float)) for k, v in by_z.items()},
-        "layer_vs_by_band": {k: _summary(np.asarray(v, float)) for k, v in by_band.items()},
+        "layer_vs_by_band": {
+            k: _summary(np.asarray(v, float)) for k, v in by_band.items()
+        },
     }
 
 
