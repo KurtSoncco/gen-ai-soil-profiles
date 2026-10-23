@@ -1,12 +1,18 @@
-# Generative models for 1D shear-wave velocity profiles
+# 1D soil profiles: a generator, a wave simulator, and a transfer-function surrogate
 
 [![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![CI](https://github.com/KurtSoncco/gen-ai-soil-profiles/actions/workflows/ci.yml/badge.svg)](https://github.com/KurtSoncco/gen-ai-soil-profiles/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellowgreen?style=for-the-badge)](https://opensource.org/licenses/MIT)
 
-This repository studies generative models of **one-dimensional** shear-wave velocity profiles \(V_s(z)\). It does not generate a spatial (map) random field. The current model is a Transformer conditional flow matcher on per-layer tokens, with thicknesses that sum to a conditioned depth and \(V_s\) inside [100, 5000] m/s. Earlier work in the same repo includes parametric baselines, a Conv1D VAE/GAN, and a cumulative travel-time flow that is kept only as a negative control.
+This repository has three pieces for **one-dimensional** soil columns. It does not generate a spatial (map) random field.
 
-[Abstract](#abstract) · [Current model](#current-model) · [Data](#data) · [Results](#results) · [Limits](#what-this-is-not) · [Reproduce](#how-to-reproduce) · [Earlier experiments](#earlier-experiments) · [Write-ups](#write-ups) · [References](#references)
+1. A Transformer conditional flow matcher generates layered \(V_s(z)\). Thicknesses sum to a conditioned depth and \(V_s\) stays inside [100, 5000] m/s.
+2. A linear solver computes the outcrop shear-wave transfer function of a column, with Rayleigh damping fixed at 2% at 1 Hz and at 10 Hz.
+3. A layer-chain surrogate reads the same column and approximates that transfer function. On the synthetic draw its surface relative L1 is 0.13 and its Pearson correlation is 0.98. After a short fine-tune on profiles from the generator, the holdout surface relative L1 is 0.12.
+
+Earlier work in the same repo includes parametric baselines, a Conv1D VAE/GAN, and a cumulative travel-time flow that is kept only as a negative control.
+
+[Abstract](#abstract) · [Current model](#current-model) · [Data](#data) · [Results](#results) · [Simulator and surrogate](#simulator-and-surrogate) · [Limits](#what-this-is-not) · [Reproduce](#how-to-reproduce) · [Earlier experiments](#earlier-experiments) · [Write-ups](#write-ups) · [References](#references)
 
 ## Abstract
 
@@ -17,6 +23,8 @@ The current model uses the same Transformer and changes the tokens. Each token i
 The catalog is 2,369 VSPDB profiles cut to at most 20 breakpoints (1,895 / 236 / 238). Three seeds: every sample valid, Vs30 median 303–318 m/s against 309, residual inter-layer \(\rho\) 0.790–0.799 against 0.772 (fitted Toro 0.774), and a better depth trend than Toro. A 50/50 Toro–Gaussian start hits \(\rho\) 0.765–0.788 and doubles trend error. Generated \(f_0\) matches train (8 Hz), not test (9.5 Hz).
 
 This is a **Vs30- and \(H\)-conditional generator of the 20-layer catalog**, not a regional site field. VSPDB is pooled and unlabeled; median depth is 30 m. More anonymous 30 m logs will not unmix regions.
+
+The wave simulator is exact for this linear Rayleigh model. The surrogate is trained on that solver, not on earthquake recordings. It is feasible as a stand-in for the linear transfer function, including on columns the generator draws. It is not an empirical amplification model.
 
 ## Current model
 
@@ -77,13 +85,38 @@ A Gaussian-trend structured prior (three seeds) did not beat the Stage 3 control
 
 The Conv1D VAE reports Vs30 on a different protocol (real mean 219 m/s) and is not a row in the table above.
 
+## Simulator and surrogate
+
+Code: [`experiments/latent_path_operator`](experiments/latent_path_operator). The label is `rayleigh_field` in [`solvers.py`](experiments/latent_path_operator/solvers.py): an up-and-down recursion with wavenumber and impedance from \(\mu(1+i\omega a_1)\) and \(-\rho\omega^2 + i\omega a_0\rho\). The coefficients \(a_0\) and \(a_1\) are fixed so the damping ratio is 0.02 at 1 Hz and at 10 Hz. The reported field is the outcrop transfer function \(u(z,f)/u_{\mathrm{outcrop}}\). The same physics is the \(4\times 4\) layer matrix in [`propagator.py`](experiments/latent_path_operator/propagator.py). No training loss contains a PDE residual. The solver is the label.
+
+The frequency grid is 1,000 log-spaced points: 200 from 0.01 to 1 Hz and 800 from 1 to 20 Hz. Four operators trained for 2,000 steps (batch 32, learning rate \(10^{-3}\), seed 0) and were scored on 32 new columns (seed 11). Soil \(V_s\) is log-uniform on 150–800 m/s, there are 1–7 layers, and the half-space is 1500 m/s. Relative L1 is the training loss aggregated over the column. Pearson correlation uses the concatenated real and imaginary parts. Misfit is \(\lVert\mathrm{prediction}-\mathrm{truth}\rVert/\lVert\mathrm{truth}\rVert\).
+
+| Architecture | Surface L1 | Surface Pearson | Surface misfit | Surface L1 above 3 Hz |
+|---|---:|---:|---:|---:|
+| Rayleigh chain | 0.132 | 0.976 | 0.185 | 0.209 |
+| Modal DeepONet | 0.337 | 0.884 | 0.433 | 0.478 |
+| Morlet wavelet trunk | 0.640 | 0.612 | 0.781 | 0.874 |
+| Laplace pole trunk | 0.826 | 0.518 | 0.921 | 1.144 |
+
+The chain is one encoder over the layers in depth order. It emits one elastic compliance per layer. The known Rayleigh factors and the matrix product produce \(u(z,f)\). Higher peaks come from the stack. The modal net sums layer embeddings and parks poles on the odd quarter-wave harmonics of one travel time, so columns with six or more layers stay near relative L1 0.84 above 3 Hz at all depths. The wavelet and Laplace trunks, each with one branch, do not close that gap.
+
+![Operator metric boxes](docs/figures/tf_metric_boxes.png)
+
+**Figure 4.** Per-column scores on the seed-11 draw of 32 columns. The top row is the surface over 0.01–20 Hz. The bottom row is every query depth at frequencies at or above 3 Hz. The chain is the tight box near a relative L1 of 0.15 and a correlation near 1.
+
+Coupling uses the seed-42 constrained generator (`s42_e500`). A generated profile’s deepest layer is the half-space. The chain is then scored against the same Rayleigh solver. On 64 holdout profiles the pretrained chain has mean surface relative L1 0.202 and Pearson correlation 0.904. The median column is already 0.081; a tail of stiff profiles is the error. One thousand further steps on a separate pool of 512 generated profiles, learning rate \(3\times 10^{-4}\), moves the holdout mean to 0.121 and the correlation to 0.981. The median moves from 0.081 to 0.109. The tail is what improves. All depths above 3 Hz move from mean relative L1 0.299 to 0.203. Checkpoint: `outputs/latent_path_operator/tf_chain_generated.pt`. The original `tf_chain.pt` is unchanged.
+
+![Generated profiles and transfer functions](docs/figures/tf_generated_profiles.png)
+
+**Figure 5.** Three holdout columns from the generator. Depth increases downward. Navy is the Rayleigh solver, vermillion is the chain trained on the synthetic draw, and cyan is the same chain after the fine-tune. The pretrained chain invents peaks on the stiff columns. The fine-tuned chain follows the solver.
+
 ## What this is not
 
 - A spatial generator. Profiles are independent 1D columns.
 - An unconditional draw from \(P(\text{profile})\). Sampling copies \((n, H, V_{s,z})\) from a training hole.
 - A regional or basin model. VSPDB is pooled; there is no region or \(Z_{1.0}\) condition. Vs50 is almost the same number as Vs30 on holes that reach 50 m (Spearman 0.99). \(Z_{1.0}\) is defined on 27% of train and is not the NGA basin depth.
 - A bound-rate of 1.0 as a fidelity claim. About 2.7% of training layers were clipped into [100, 5000] m/s. Real test bound rate is 0.95.
-- A validated site-amplification model. Only linear SH \(f_0\) is scored, and that follows the train split.
+- A validated site-amplification model against recordings. The Rayleigh solver is exact for this damping model. The chain approximates that transfer function. Neither is an empirical amplification from earthquakes. Generated \(f_0\) still follows the train split (about 8 Hz), not the test split (9.5 Hz).
 
 ## How to reproduce
 
@@ -106,6 +139,14 @@ python -m experiments.flow_matching_simplified.plot_constrained_figures
 ```
 
 `--no-toro-source` starts from Gaussian noise. `--toro-source-frac 0.5` is the Stage 10 mix. The Stage 3 control is `train_onewaytime.py` plus `run_corrected_eval`.
+
+The transfer-function surrogate is a separate training run. Weights stay under `outputs/` and are not in git. `--boxes` writes the four-operator figure. The last command samples the generator, scores `tf_chain.pt` on a holdout, fine-tunes for 1,000 steps, and writes the coupled figures.
+
+```bash
+python -m experiments.latent_path_operator.train --model tf --arch chain --steps 2000 --batch-size 32 --lr 1e-3 --seed 0
+python -m experiments.latent_path_operator.eval_tf --boxes
+python -m experiments.latent_path_operator.generated --stage all
+```
 
 ## Earlier experiments
 
